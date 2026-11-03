@@ -1,0 +1,7 @@
+com.mymesag.network.core-network-pngs-0 D:\Sync\个人\MyMesag\Develop\core-network\build\generated\res\pngs\release
+com.mymesag.network.core-network-resValues-1 D:\Sync\个人\MyMesag\Develop\core-network\build\generated\res\resValues\release
+com.mymesag.network.core-network-mergeReleaseResources-2 D:\Sync\个人\MyMesag\Develop\core-network\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+com.mymesag.network.core-network-mergeReleaseResources-3 D:\Sync\个人\MyMesag\Develop\core-network\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+com.mymesag.network.core-network-release-4 D:\Sync\个人\MyMesag\Develop\core-network\build\intermediates\merged_res\release\mergeReleaseResources
+com.mymesag.network.core-network-main-5 D:\Sync\个人\MyMesag\Develop\core-network\src\main\res
+com.mymesag.network.core-network-release-6 D:\Sync\个人\MyMesag\Develop\core-network\src\release\res

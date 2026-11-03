@@ -1,0 +1,303 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.mymesag"
+4    android:versionCode="1"
+5    android:versionName="0.1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:5:5-67
+11-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:5:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:6:5-79
+12-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:6:22-76
+13    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+13-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:7:5-77
+13-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:7:22-74
+14    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+14-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:8:5-75
+14-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:8:22-72
+15    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+15-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:9:5-72
+15-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:9:22-69
+16    <uses-permission android:name="android.permission.READ_CONTACTS" />
+16-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:10:5-72
+16-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:10:22-69
+17    <uses-permission android:name="android.permission.SEND_SMS" />
+17-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:11:5-67
+17-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:11:22-64
+18    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+18-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:12:5-77
+18-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:12:22-74
+19    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+19-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:13:5-87
+19-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:13:22-84
+20    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+20-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:14:5-95
+20-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:14:22-92
+21    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
+21-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:15:5-93
+21-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:15:22-90
+22    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+22-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:16:5-18:53
+22-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:17:9-61
+23
+24    <queries>
+24-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:20:5-30:15
+25
+26        <!-- 表 4 四个回复应用 + 常见短信包（包可见性，项目书 2.2 R3） -->
+27        <package android:name="com.tencent.mm" />
+27-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:22:9-50
+27-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:22:18-47
+28        <package android:name="com.android.mms" />
+28-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:23:9-51
+28-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:23:18-48
+29        <package android:name="com.tencent.mobileqq" />
+29-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:24:9-56
+29-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:24:18-53
+30        <package android:name="com.tencent.tim" />
+30-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:25:9-51
+30-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:25:18-48
+31
+32        <intent>
+32-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:26:9-29:18
+33            <action android:name="android.intent.action.MAIN" />
+33-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:27:13-65
+33-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:27:21-62
+34
+35            <category android:name="android.intent.category.LAUNCHER" />
+35-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:28:13-73
+35-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:28:23-70
+36        </intent>
+37    </queries>
+38
+39    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+40    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+41
+42    <permission
+42-->[androidx.core:core:1.15.0] C:\Users\h3c\.gradle\caches\8.12\transforms\6e3ef7fd29cc67afb8544ba90a10020f\transformed\core-1.15.0\AndroidManifest.xml:22:5-24:47
+43        android:name="com.mymesag.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+43-->[androidx.core:core:1.15.0] C:\Users\h3c\.gradle\caches\8.12\transforms\6e3ef7fd29cc67afb8544ba90a10020f\transformed\core-1.15.0\AndroidManifest.xml:23:9-81
+44        android:protectionLevel="signature" />
+44-->[androidx.core:core:1.15.0] C:\Users\h3c\.gradle\caches\8.12\transforms\6e3ef7fd29cc67afb8544ba90a10020f\transformed\core-1.15.0\AndroidManifest.xml:24:9-44
+45
+46    <uses-permission android:name="com.mymesag.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+46-->[androidx.core:core:1.15.0] C:\Users\h3c\.gradle\caches\8.12\transforms\6e3ef7fd29cc67afb8544ba90a10020f\transformed\core-1.15.0\AndroidManifest.xml:26:5-97
+46-->[androidx.core:core:1.15.0] C:\Users\h3c\.gradle\caches\8.12\transforms\6e3ef7fd29cc67afb8544ba90a10020f\transformed\core-1.15.0\AndroidManifest.xml:26:22-94
+47    <uses-permission android:name="android.permission.CAMERA" /> <!-- Don't require camera, as this requires a rear camera. This allows it to work on the Nexus 7 -->
+47-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:22:5-65
+47-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:22:22-62
+48    <uses-feature
+48-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:25:5-27:36
+49        android:name="android.hardware.camera"
+49-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:26:9-47
+50        android:required="false" />
+50-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:27:9-33
+51    <uses-feature
+51-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:28:5-30:36
+52        android:name="android.hardware.camera.front"
+52-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:29:9-53
+53        android:required="false" /> <!-- TODO replace above two with next line after Android 4.2 -->
+53-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:30:9-33
+54    <!-- <uses-feature android:name="android.hardware.camera.any"/> -->
+55    <uses-feature
+55-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:33:5-35:36
+56        android:name="android.hardware.camera.autofocus"
+56-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:34:9-57
+57        android:required="false" />
+57-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:35:9-33
+58    <uses-feature
+58-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:36:5-38:36
+59        android:name="android.hardware.camera.flash"
+59-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:37:9-53
+60        android:required="false" />
+60-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:38:9-33
+61    <uses-feature
+61-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:39:5-41:36
+62        android:name="android.hardware.screen.landscape"
+62-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:40:9-57
+63        android:required="false" />
+63-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:41:9-33
+64    <uses-feature
+64-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:42:5-44:36
+65        android:name="android.hardware.wifi"
+65-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:43:9-45
+66        android:required="false" />
+66-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:44:9-33
+67
+68    <application
+68-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:32:5-75:19
+69        android:name="com.mymesag.MyMesagApp"
+69-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:33:9-35
+70        android:allowBackup="true"
+70-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:34:9-35
+71        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+71-->[androidx.core:core:1.15.0] C:\Users\h3c\.gradle\caches\8.12\transforms\6e3ef7fd29cc67afb8544ba90a10020f\transformed\core-1.15.0\AndroidManifest.xml:28:18-86
+72        android:extractNativeLibs="false"
+73        android:icon="@mipmap/ic_launcher"
+73-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:35:9-43
+74        android:label="@string/app_name"
+74-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:37:9-41
+75        android:roundIcon="@mipmap/ic_launcher"
+75-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:36:9-48
+76        android:supportsRtl="true"
+76-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:38:9-35
+77        android:theme="@style/Theme.MyMesag" >
+77-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:39:9-45
+78        <activity
+78-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:41:9-49:20
+79            android:name="com.mymesag.MainActivity"
+79-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:42:13-41
+80            android:exported="true"
+80-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:43:13-36
+81            android:theme="@style/Theme.MyMesag" >
+81-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:44:13-49
+82            <intent-filter>
+82-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:45:13-48:29
+83                <action android:name="android.intent.action.MAIN" />
+83-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:27:13-65
+83-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:27:21-62
+84
+85                <category android:name="android.intent.category.LAUNCHER" />
+85-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:28:13-73
+85-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:28:23-70
+86            </intent-filter>
+87        </activity>
+88        <activity
+88-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:51:9-54:52
+89            android:name="com.mymesag.ui.ReplyActivity"
+89-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:52:13-45
+90            android:exported="false"
+90-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:53:13-37
+91            android:theme="@style/Theme.MyMesag" />
+91-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:54:13-49
+92        <activity
+92-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:56:9-59:52
+93            android:name="com.mymesag.ui.MissedCallReplyActivity"
+93-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:57:13-55
+94            android:exported="false"
+94-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:58:13-37
+95            android:theme="@style/Theme.MyMesag" />
+95-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:59:13-49
+96
+97        <service
+97-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:61:9-69:19
+98            android:name="com.mymesag.service.NotifyListenerService"
+98-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:62:13-58
+99            android:exported="true"
+99-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:63:13-36
+100            android:label="@string/app_name"
+100-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:64:13-45
+101            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" >
+101-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:65:13-87
+102            <intent-filter>
+102-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:66:13-68:29
+103                <action android:name="android.service.notification.NotificationListenerService" />
+103-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:67:17-99
+103-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:67:25-96
+104            </intent-filter>
+105        </service>
+106        <service
+106-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:71:9-74:56
+107            android:name="com.mymesag.service.MqttForegroundService"
+107-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:72:13-58
+108            android:exported="false"
+108-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:73:13-37
+109            android:foregroundServiceType="dataSync" />
+109-->D:\Sync\个人\MyMesag\Develop\app\src\main\AndroidManifest.xml:74:13-53
+110
+111        <provider
+111-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+112            android:name="androidx.startup.InitializationProvider"
+112-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+113            android:authorities="com.mymesag.androidx-startup"
+113-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+114            android:exported="false" >
+114-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+115            <meta-data
+115-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+116                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+116-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+117                android:value="androidx.startup" />
+117-->[androidx.emoji2:emoji2:1.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\438ebce7aa6d50bc8922ab4aed3b8eb9\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+118            <meta-data
+118-->[androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\h3c\.gradle\caches\8.12\transforms\b1195c1b8e977cf2e6917ea7f662d126\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:29:13-31:52
+119                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+119-->[androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\h3c\.gradle\caches\8.12\transforms\b1195c1b8e977cf2e6917ea7f662d126\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:30:17-78
+120                android:value="androidx.startup" />
+120-->[androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\h3c\.gradle\caches\8.12\transforms\b1195c1b8e977cf2e6917ea7f662d126\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:31:17-49
+121            <meta-data
+121-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+122                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+122-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+123                android:value="androidx.startup" />
+123-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+124        </provider>
+125
+126        <service
+126-->[androidx.room:room-runtime:2.6.1] C:\Users\h3c\.gradle\caches\8.12\transforms\a4880bb976f60e121ee95d5a6009170e\transformed\room-runtime-2.6.1\AndroidManifest.xml:24:9-28:63
+127            android:name="androidx.room.MultiInstanceInvalidationService"
+127-->[androidx.room:room-runtime:2.6.1] C:\Users\h3c\.gradle\caches\8.12\transforms\a4880bb976f60e121ee95d5a6009170e\transformed\room-runtime-2.6.1\AndroidManifest.xml:25:13-74
+128            android:directBootAware="true"
+128-->[androidx.room:room-runtime:2.6.1] C:\Users\h3c\.gradle\caches\8.12\transforms\a4880bb976f60e121ee95d5a6009170e\transformed\room-runtime-2.6.1\AndroidManifest.xml:26:13-43
+129            android:exported="false" />
+129-->[androidx.room:room-runtime:2.6.1] C:\Users\h3c\.gradle\caches\8.12\transforms\a4880bb976f60e121ee95d5a6009170e\transformed\room-runtime-2.6.1\AndroidManifest.xml:27:13-37
+130
+131        <receiver
+131-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+132            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+133            android:directBootAware="false"
+133-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+134            android:enabled="true"
+134-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+135            android:exported="true"
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+136            android:permission="android.permission.DUMP" >
+136-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+137            <intent-filter>
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+138                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+139            </intent-filter>
+140            <intent-filter>
+140-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+141                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+141-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+141-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+142            </intent-filter>
+143            <intent-filter>
+143-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+144                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+144-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+144-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+145            </intent-filter>
+146            <intent-filter>
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+147                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+147-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+147-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\h3c\.gradle\caches\8.12\transforms\2c81b5cb1aa43e981519d47277b33886\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+148            </intent-filter>
+149        </receiver>
+150
+151        <activity
+151-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:47:9-53:63
+152            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+152-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:48:13-74
+153            android:clearTaskOnLaunch="true"
+153-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:49:13-45
+154            android:screenOrientation="sensorLandscape"
+154-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:50:13-56
+155            android:stateNotNeeded="true"
+155-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:51:13-42
+156            android:theme="@style/zxing_CaptureTheme"
+156-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:52:13-54
+157            android:windowSoftInputMode="stateAlwaysHidden" />
+157-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\h3c\.gradle\caches\8.12\transforms\044abc624256a1f2a36bb0e124d3ca39\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:53:13-60
+158    </application>
+159
+160</manifest>

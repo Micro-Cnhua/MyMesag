@@ -1,0 +1,7 @@
+com.mymesag.crypto.core-crypto-pngs-0 D:\Sync\个人\MyMesag\Develop\core-crypto\build\generated\res\pngs\release
+com.mymesag.crypto.core-crypto-resValues-1 D:\Sync\个人\MyMesag\Develop\core-crypto\build\generated\res\resValues\release
+com.mymesag.crypto.core-crypto-mergeReleaseResources-2 D:\Sync\个人\MyMesag\Develop\core-crypto\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+com.mymesag.crypto.core-crypto-mergeReleaseResources-3 D:\Sync\个人\MyMesag\Develop\core-crypto\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+com.mymesag.crypto.core-crypto-release-4 D:\Sync\个人\MyMesag\Develop\core-crypto\build\intermediates\merged_res\release\mergeReleaseResources
+com.mymesag.crypto.core-crypto-main-5 D:\Sync\个人\MyMesag\Develop\core-crypto\src\main\res
+com.mymesag.crypto.core-crypto-release-6 D:\Sync\个人\MyMesag\Develop\core-crypto\src\release\res
