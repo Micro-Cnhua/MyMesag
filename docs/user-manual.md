@@ -31,5 +31,5 @@
 2.  通知使用权在新版安卓系统中做出了安全限制，可以通过系统的提示进行解除限制开启MyMesag的通知使用权
 
 ## 声明
-*该项目遵守MIT License协议，[访问Micro-CnHuA以查看源项目](http://Github.com/Micro-CnHuA/MyMesag)*
+*该项目遵守MIT License协议，[访问Micro-CnHuA以查看源项目](https://github.com/Micro-CnHuA/MyMesag)*
 
