@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+// 从 local.properties 读取签名配置（不上传到 Git）
+val keystorePropertiesFile = rootProject.file("local.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -21,10 +31,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("mymesag-release.jks")
-            storePassword = "mymesag123"
-            keyAlias = "mymesag"
-            keyPassword = "mymesag123"
+            storeFile = file(keystoreProperties.getProperty("storeFile", "mymesag-release.jks"))
+            storePassword = keystoreProperties.getProperty("storePassword", "")
+            keyAlias = keystoreProperties.getProperty("keyAlias", "mymesag")
+            keyPassword = keystoreProperties.getProperty("keyPassword", "")
         }
     }
 
