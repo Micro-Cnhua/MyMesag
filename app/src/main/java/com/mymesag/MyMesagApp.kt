@@ -68,6 +68,7 @@ class MyMesagApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "MyMesagApp onCreate started")
+        com.mymesag.ui.ThemeManager.init(this)
         // 升级到加密存储 + 加载会话密钥（阻塞直到完成，避免消息处理时密钥未加载）
         appScope.launch {
             try {

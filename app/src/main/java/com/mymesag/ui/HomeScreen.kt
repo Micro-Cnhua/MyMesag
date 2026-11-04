@@ -1,12 +1,46 @@
 package com.mymesag.ui
 
-import androidx.compose.foundation.layout.*
+import android.provider.Settings
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DevicesOther
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Router
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,32 +51,53 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.mymesag.notification.KeepAliveGuide
+import com.mymesag.MyMesagApp
+import com.mymesag.data.MqttConnection
+import com.mymesag.network.MqttConfig
+import com.mymesag.network.MqttState
 import com.mymesag.notification.NotificationAccess
-import com.mymesag.notification.RomCompatibility
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onOpenMqtt: () -> Unit,
-    onOpenPair: () -> Unit,
-    onOpenDiagnostic: () -> Unit,
-    onOpenManual: () -> Unit
+    onOpenPair: () -> Unit
 ) {
     val context = LocalContext.current
-    var granted by remember { mutableStateOf(NotificationAccess.isGranted(context)) }
-    val romWarning = remember { RomCompatibility.getRomSpecificWarnings() }
+    val app = context.applicationContext as MyMesagApp
+    val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
 
-    // 从系统设置返回后（onResume）重新检查通知使用权
+    var mqttState by remember { mutableStateOf(MqttConnection.manager.state.value) }
+    var notificationAccess by remember { mutableStateOf(false) }
+    var pairedDevices by remember { mutableStateOf(0) }
+    var savedBroker by remember { mutableStateOf<String?>(null) }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                granted = NotificationAccess.isGranted(context)
+                mqttState = MqttConnection.manager.state.value
+                notificationAccess = NotificationAccess.isGranted(context)
+                scope.launch {
+                    pairedDevices = app.pairingManager.pairedDeviceIds().size
+                    savedBroker = app.mqttConfigStore.savedBrokerUrl()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    DisposableEffect(Unit) {
+        val job = scope.launch {
+            MqttConnection.manager.state.collect { mqttState = it }
+        }
+        onDispose { job.cancel() }
     }
 
     Scaffold(
@@ -55,7 +110,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -68,179 +123,163 @@ fun HomeScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // ROM 警告
-            if (romWarning != null) {
-                WarningCard(romWarning)
-            }
-
-            // 状态卡片
-            StatusCard(
-                title = "通知使用权",
-                description = if (granted) "已开启，可以采集通知" else "未开启，无法采集通知",
-                isOk = granted,
-                actionLabel = if (granted) null else "开启",
-                onAction = { NotificationAccess.openSettings(context) }
-            )
-
-            // 使用教程（可折叠）
-            TutorialCard()
-
-            // 快速操作
-            QuickActionsSection(
-                onMqttClick = onOpenMqtt,
-                onPairClick = onOpenPair,
-                onDiagnosticClick = onOpenDiagnostic,
-                onManualClick = onOpenManual
-            )
-
-            // 系统设置
-            SystemSettingsSection(context)
-        }
-    }
-}
-
-@Composable
-private fun WarningCard(message: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusCard(
-    title: String,
-    description: String,
-    isOk: Boolean,
-    actionLabel: String?,
-    onAction: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isOk) 
-                MaterialTheme.colorScheme.primaryContainer 
-            else 
-                MaterialTheme.colorScheme.errorContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    if (isOk) Icons.Default.CheckCircle else Icons.Default.Error,
-                    contentDescription = null,
-                    tint = if (isOk) 
-                        MaterialTheme.colorScheme.primary 
-                    else 
-                        MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(32.dp)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
                 )
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(Modifier.width(12.dp))
                     Text(
-                        description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isOk) 
-                            MaterialTheme.colorScheme.onPrimaryContainer 
-                        else 
-                            MaterialTheme.colorScheme.onErrorContainer
+                        "首次使用请点击「设置操作」页根据使用教程进行设置",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }
-            if (actionLabel != null) {
-                Button(onClick = onAction) {
-                    Text(actionLabel)
+
+            Spacer(Modifier.height(4.dp))
+
+            StatusItem(
+                icon = if (mqttState == MqttState.CONNECTED) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                title = "MQTT 连接",
+                status = when (mqttState) {
+                    MqttState.CONNECTED -> "已连接"
+                    MqttState.CONNECTING -> "连接中..."
+                    MqttState.RECONNECTING -> "重连中..."
+                    MqttState.DISCONNECTED -> "未连接"
+                    MqttState.ERROR -> "错误"
+                },
+                isOk = mqttState == MqttState.CONNECTED,
+                onClick = onOpenMqtt
+            )
+            StatusItem(
+                icon = if (notificationAccess) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                title = "通知使用权",
+                status = if (notificationAccess) "已开启" else "未开启",
+                isOk = notificationAccess,
+                onClick = { NotificationAccess.openSettings(context) }
+            )
+            StatusItem(
+                icon = Icons.Default.DevicesOther,
+                title = "配对设备",
+                status = "$pairedDevices 台设备",
+                isOk = pairedDevices > 0,
+                onClick = onOpenPair
+            )
+            StatusItem(
+                icon = Icons.Default.Router,
+                title = "MQTT 服务器",
+                status = savedBroker ?: "未配置",
+                isOk = !savedBroker.isNullOrBlank(),
+                onClick = onOpenMqtt
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("操作", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    MqttConnection.manager.disconnect()
+                                    delay(500)
+                                    val broker = app.mqttConfigStore.savedBrokerUrl()
+                                    val clientId = app.mqttConfigStore.savedClientId()
+                                    val username = app.mqttConfigStore.savedUsername()
+                                    val password = app.mqttConfigStore.savedPassword()
+                                    val caCertPem = app.mqttConfigStore.savedCaCertPem()
+                                    val willTopic = app.presenceManager.willTopic()
+                                    if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
+                                        MqttConnection.manager.connect(
+                                            MqttConfig(
+                                                brokerUrl = broker,
+                                                clientId = clientId,
+                                                username = username,
+                                                password = password,
+                                                willTopic = willTopic,
+                                                willPayload = "offline",
+                                                caCertPem = caCertPem
+                                            )
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("  强制重连")
+                        }
+                        Button(
+                            onClick = { NotificationAccess.openSettings(context) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("  通知权限")
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                val userId = app.deviceIdentity.userId()
+                                val deviceId = app.deviceIdentity.deviceId()
+                                val topic = "test/$userId/$deviceId"
+                                val payload = "Diagnostic test at ${System.currentTimeMillis()}"
+                                MqttConnection.manager.publish(topic, payload, qos = 1)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("测试发布消息") }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val intent = android.content.Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                            android.widget.Toast.makeText(
+                                context,
+                                "请在通知使用权设置中：先关闭 MyMesag，等待 3 秒，再重新开启",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("重新绑定通知监听器") }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun QuickActionsSection(
-    onMqttClick: () -> Unit,
-    onPairClick: () -> Unit,
-    onDiagnosticClick: () -> Unit,
-    onManualClick: () -> Unit
-) {
-    Text(
-        "快速操作",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
-    
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ActionButton(
-            icon = Icons.Default.Cloud,
-            title = "MQTT 配置",
-            description = "配置服务器连接",
-            onClick = onMqttClick
-        )
-        ActionButton(
-            icon = Icons.Default.Devices,
-            title = "设备配对",
-            description = "配对其他设备",
-            onClick = onPairClick
-        )
-        ActionButton(
-            icon = Icons.Default.BugReport,
-            title = "诊断工具",
-            description = "查看系统状态",
-            onClick = onDiagnosticClick
-        )
-        ActionButton(
-            icon = Icons.Default.MenuBook,
-            title = "额外帮助",
-            description = "查看在线额外帮助",
-            onClick = onManualClick
-        )
-    }
-}
-
-@Composable
-private fun ActionButton(
+private fun StatusItem(
     icon: ImageVector,
     title: String,
-    description: String,
+    status: String,
+    isOk: Boolean,
     onClick: () -> Unit
 ) {
+    val statusColor = if (isOk) Color(0xFF2E7D32) else Color(0xFFC62828)
+    val statusIcon = if (isOk) Icons.Default.CheckCircle else Icons.Default.Error
     ElevatedCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth()
@@ -255,155 +294,17 @@ private fun ActionButton(
                 icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SystemSettingsSection(context: android.content.Context) {
-    Text(
-        "系统设置",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
-    
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { context.startActivity(KeepAliveGuide.batteryOptimizationIntent(context)) }
-        ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f)
+                    .padding(start = 12.dp)
             ) {
-                Icon(
-                    Icons.Default.BatteryFull,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "电池优化白名单",
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(status, style = MaterialTheme.typography.bodyLarge)
             }
+            Icon(statusIcon, contentDescription = null, tint = statusColor, modifier = Modifier.size(22.dp))
         }
-        
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { context.startActivity(KeepAliveGuide.autoStartIntent(context)) }
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.PowerSettingsNew,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "自启动设置",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TutorialCard() {
-    var expanded by remember { mutableStateOf(true) }
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        onClick = { expanded = !expanded }
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "使用教程",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "收起" else "展开",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            if (expanded) {
-                Spacer(Modifier.height(12.dp))
-                TutorialStep("1", "开启「通知使用权」")
-                TutorialStep("2", "配置 MQTT 服务器并连接")
-                TutorialStep("3", "两台设备互相配对")
-                TutorialStep("4", "在「应用选择」开启要同步的应用")
-                TutorialStep("5", "在「同步设置」控制发送/接收方向")
-            }
-        }
-    }
-}
-
-@Composable
-private fun TutorialStep(num: String, text: String) {
-    Row(
-        modifier = Modifier.padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Text(
-                    num,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium
-        )
     }
 }
