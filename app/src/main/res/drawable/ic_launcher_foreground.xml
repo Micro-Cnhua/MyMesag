@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：白色信封 + M 形封口（封口用背景色镂空呈现 M 字母） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 信封主体（白色圆角矩形） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,32 h44 a8,8 0 0 1 8,8 v28 a8,8 0 0 1 -8,8 h-44 a8,8 0 0 1 -8,-8 v-28 a8,8 0 0 1 8,-8 z" />
+
+    <!-- M 形封口（背景色描边，形成 M 字母） -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="@color/ic_launcher_background"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M34,66 L34,44 L54,60 L74,44 L74,66" />
+</vector>

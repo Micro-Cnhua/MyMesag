@@ -45,7 +45,7 @@ class UserManualViewModel(application: Application) : AndroidViewModel(applicati
     private suspend fun fetchManual() {
         withContext(Dispatchers.IO) {
             try {
-                val markdown = fetchFromCdn() ?: fetchFromGitHub()
+                val markdown = candidateUrls().firstNotNullOfOrNull { fetchUrl(it) }
                 if (markdown != null) {
                     val html = MarkdownRenderer.wrapHtml(MarkdownRenderer.markdownToHtml(markdown))
                     cacheFile.writeText(html, Charsets.UTF_8)
@@ -70,13 +70,10 @@ class UserManualViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    /** jsDelivr CDN 加速（国内快） */
-    private fun fetchFromCdn(): String? = fetchUrl(
-        "https://cdn.jsdelivr.net/gh/$REPO_PATH@$BRANCH/$FILE_PATH"
-    )
-
-    /** 直连 GitHub 降级 */
-    private fun fetchFromGitHub(): String? = fetchUrl(
+    /** 候选加速源，按顺序尝试：gh-proxy 镜像（实时回源）→ jsDelivr → 直连 GitHub */
+    private fun candidateUrls(): List<String> = listOf(
+        "https://ghfast.top/https://raw.githubusercontent.com/$REPO_PATH/$BRANCH/$FILE_PATH",
+        "https://cdn.jsdelivr.net/gh/$REPO_PATH@$BRANCH/$FILE_PATH",
         "https://raw.githubusercontent.com/$REPO_PATH/$BRANCH/$FILE_PATH"
     )
 
