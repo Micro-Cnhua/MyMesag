@@ -2,7 +2,7 @@
 
 跨设备通知同步工具，支持端到端加密，通过 MQTT 协议实现手机间通知实时同步。
 
-## ✨ 功能特性
+## 功能特性
 
 -   **通知同步** - 实时同步手机通知到另一台设备
 -   **端到端加密** - AES-256-GCM + X25519 密钥交换，服务器无法解密
@@ -10,7 +10,7 @@
 -   **未接来电回复(修复中)** - 收到未接来电同步后，可直接回复短信
 -   **应用过滤** - 自由选择需要同步的应用
 -   **验证码同步** - 可选同步验证码短信（需确认风险）
-## 🛠️ 技术栈
+## 技术栈
 
 - **语言**: Kotlin
 - **UI**: Jetpack Compose + Material 3
@@ -19,7 +19,7 @@
 - **存储**: Room Database + DataStore + Android Keystore
 - **架构**: MVVM + Clean Architecture (多模块)
 
-## 📦 项目结构
+## 项目结构
 
 ```
 MyMesag/
@@ -42,7 +42,7 @@ MyMesag/
 └── build.gradle.kts        # 根构建配置
 ```
 
-## 🚀 编译构建
+## 编译构建
 
 ### 环境要求
 
@@ -79,7 +79,7 @@ signingConfigs {
 }
 ```
 
-## 📖 使用指南
+## 使用指南
 
 ### 首次使用
 
@@ -93,7 +93,7 @@ signingConfigs {
 
 应用内置「额外帮助」页面提供完整使用教程，内容从 GitHub 自动同步。
 
-## 🔒 安全说明
+## 安全说明
 
 ### 加密机制
 
@@ -109,12 +109,13 @@ signingConfigs {
 - ⚠️ 不要将签名密钥（.jks 文件）上传到公开仓库
 - ⚠️ 建议使用自建 MQTT 服务器，避免使用公共服务器
 
-## 🌐 MQTT 服务器配置
+## MQTT 服务器配置
 
 ### 自建服务器（推荐）
 
+#### 使用 Mosquitto
+
 ```bash
-# 使用 Mosquitto
 docker run -d --name mosquitto \
   -p 1883:1883 \
   -p 8883:8883 \
@@ -122,26 +123,35 @@ docker run -d --name mosquitto \
   eclipse-mosquitto
 ```
 
+#### 使用 EMQX
+详见docs目录中的MQTT-Broker-Docker-Compose.md文档：
+[点击查看](docs/MQTT-Broker-Docker-Compose.md)
+
+### 公用服务器（不推荐，有安全风险，仅建议测试）
+
+- tcp://broker.emqx.io:1883
+- ssl://broker.emqx.io:8883
+
 ### 连接格式
 
 - **TCP**: `tcp://192.168.1.100:1883`（内网）
 - **SSL**: `ssl://your-domain.com:8883`（外网，推荐）
 
-## 📱 系统要求
+## 系统要求
 
 - Android 8.0 (API 26) 及以上
 - 需要通知使用权权限
 - 可选权限：电话、短信、联系人（用于未接来电回复）
 
-## 🤝 贡献
+## 贡献
 
 欢迎提交 Issue 和 Pull Request！
 
-## 📄 许可证
+## 许可证
 
 本项目采用 Apache License 2.0 许可证 - 详见 [LICENSE](LICENSE) 文件
 
-## 🙏 致谢
+## 致谢
 
 - [Eclipse Paho](https://www.eclipse.org/paho/) - MQTT 客户端
 - [Google Tink](https://github.com/google/tink) - 加密库
