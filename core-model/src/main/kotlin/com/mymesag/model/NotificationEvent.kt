@@ -23,5 +23,5 @@ data class NotificationEvent(
     val contact: String = "",
     val priority: Int = 1,
     val canReply: Boolean = false,
-    val phoneNumber: String = ""
+    val deviceTag: String = ""
 )

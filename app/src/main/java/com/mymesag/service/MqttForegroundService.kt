@@ -64,7 +64,8 @@ class MqttForegroundService : Service() {
                 val username = app.mqttConfigStore.savedUsername()
                 val password = app.mqttConfigStore.savedPassword()
                 val caCertPem = app.mqttConfigStore.savedCaCertPem()
-                app.mqttConfigStore.save(broker, clientId, username, password, caCertPem)
+                val deviceTag = app.mqttConfigStore.savedDeviceTag()
+                app.mqttConfigStore.save(broker, clientId, username, password, caCertPem, deviceTag)
             }
             val username = app.mqttConfigStore.savedUsername()
             val password = app.mqttConfigStore.savedPassword()

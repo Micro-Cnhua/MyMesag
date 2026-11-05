@@ -13,10 +13,13 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
 
     val brokerUrl: Flow<String?> = dataStore.data.map { it[KEY_BROKER] }
     val clientId: Flow<String?> = dataStore.data.map { it[KEY_CLIENT] }
+    val deviceTag: Flow<String?> = dataStore.data.map { it[KEY_DEVICE_TAG] }
 
     suspend fun savedBrokerUrl(): String? = dataStore.data.first()[KEY_BROKER]
 
     suspend fun savedClientId(): String? = dataStore.data.first()[KEY_CLIENT]
+
+    suspend fun savedDeviceTag(): String? = dataStore.data.first()[KEY_DEVICE_TAG]
 
     suspend fun savedUsername(): String? = dataStore.data.first()[KEY_USERNAME]
 
@@ -47,7 +50,8 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
         clientId: String,
         username: String? = null,
         password: String? = null,
-        caCertPem: String? = null
+        caCertPem: String? = null,
+        deviceTag: String? = null
     ) {
         dataStore.edit {
             it[KEY_BROKER] = brokerUrl
@@ -55,6 +59,7 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
             if (username != null) it[KEY_USERNAME] = username else it.remove(KEY_USERNAME)
             if (password != null) it[KEY_PASSWORD] = secure.encrypt(password) else it.remove(KEY_PASSWORD)
             if (caCertPem != null) it[KEY_CA_CERT] = caCertPem else it.remove(KEY_CA_CERT)
+            if (deviceTag != null) it[KEY_DEVICE_TAG] = deviceTag else it.remove(KEY_DEVICE_TAG)
         }
     }
 
@@ -64,5 +69,6 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
         private val KEY_USERNAME = stringPreferencesKey("mqtt_username")
         private val KEY_PASSWORD = stringPreferencesKey("mqtt_password")
         private val KEY_CA_CERT = stringPreferencesKey("mqtt_ca_cert")
+        private val KEY_DEVICE_TAG = stringPreferencesKey("mqtt_device_tag")
     }
 }

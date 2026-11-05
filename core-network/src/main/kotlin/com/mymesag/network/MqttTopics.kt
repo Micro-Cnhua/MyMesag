@@ -25,7 +25,4 @@ object MqttTopics {
     fun configWildcard(userId: String) = "config/$userId/+"
 
     fun pair(userId: String) = "pair/$userId"
-
-    fun missedCallReply(userId: String, deviceId: String) = "missedcall/$userId/$deviceId"
-    fun missedCallReplyWildcard(userId: String) = "missedcall/$userId/+"
 }

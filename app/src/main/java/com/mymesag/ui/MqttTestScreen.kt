@@ -96,6 +96,20 @@ fun MqttTestScreen(onBack: () -> Unit, viewModel: MqttViewModel = viewModel()) {
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
+                        value = viewModel.deviceTag,
+                        onValueChange = {
+                            viewModel.deviceTag = it.filter(Char::isLetterOrDigit).take(8)
+                            viewModel.deviceTagError = null
+                        },
+                        label = { Text("设备标签（8位英文/数字）") },
+                        placeholder = { Text("用于多机时区分来源，如 Phone001") },
+                        singleLine = true,
+                        isError = viewModel.deviceTagError != null,
+                        supportingText = viewModel.deviceTagError?.let { { Text(it) } },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
                         value = viewModel.username,
                         onValueChange = { viewModel.username = it },
                         label = { Text("用户名（可选）") },

@@ -20,7 +20,6 @@ import com.mymesag.notification.CallReceiver
 import com.mymesag.notification.NotificationReceiver
 import com.mymesag.notification.PresenceManager
 import com.mymesag.pairing.PairingManager
-import com.mymesag.reply.MissedCallReplyHandler
 import com.mymesag.reply.ReplyActionCache
 import com.mymesag.reply.ReplyHandler
 import com.mymesag.service.CallListener
@@ -87,8 +86,6 @@ class MyMesagApp : Application() {
         NotificationReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端回复处理：订阅 reply/{userId}/+ 并执行回复、回传 ack
         ReplyHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache).start()
-        // A 端未接来电回复：订阅 missedcall/{userId}/+ 并发送短信
-        MissedCallReplyHandler(this, MqttConnection.manager, deviceIdentity).start()
         // B 端来电显示：订阅 call/{userId}/+
         CallReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端来电监听：监听通话状态并发布 CallEvent

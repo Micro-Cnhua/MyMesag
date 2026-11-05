@@ -24,6 +24,8 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
 
     var brokerUrl by mutableStateOf("")
     var clientId by mutableStateOf(newClientId())
+    var deviceTag by mutableStateOf("")
+    var deviceTagError by mutableStateOf<String?>(null)
     var username by mutableStateOf("")
     var password by mutableStateOf("")
     var caCertPem by mutableStateOf("")
@@ -32,6 +34,9 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
     var publishPayload by mutableStateOf("Hello from MyMesag")
 
     init {
+        viewModelScope.launch {
+            app.mqttConfigStore.savedDeviceTag()?.let { deviceTag = it }
+        }
         viewModelScope.launch {
             manager.messages.collect { msg ->
                 _log.add(0, "[${msg.topic}] ${msg.payload}")
@@ -42,12 +47,18 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
     fun connect() {
         val broker = brokerUrl.trim()
         val cid = clientId.trim().ifBlank { newClientId() }
+        val tag = deviceTag.trim()
+        if (!DEVICE_TAG_REGEX.matches(tag)) {
+            deviceTagError = "设备标签须为 8 位英文或数字"
+            return
+        }
+        deviceTagError = null
         val user = username.trim().ifBlank { null }
         val pass = password.ifBlank { null }
         val ca = caCertPem.trim().ifBlank { null }
         _log.add(0, "→ 连接 $broker")
         viewModelScope.launch {
-            app.mqttConfigStore.save(broker, cid, user, pass, ca)
+            app.mqttConfigStore.save(broker, cid, user, pass, ca, tag)
             val willTopic = app.presenceManager.willTopic()
             manager.connect(
                 MqttConfig(
@@ -80,4 +91,8 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun newClientId() = "MyMesag-" + UUID.randomUUID().toString().take(8)
+
+    companion object {
+        private val DEVICE_TAG_REGEX = Regex("^[A-Za-z0-9]{8}$")
+    }
 }

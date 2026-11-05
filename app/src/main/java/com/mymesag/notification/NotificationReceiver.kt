@@ -19,7 +19,6 @@ import com.mymesag.model.NotificationEvent
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttTopics
 import com.mymesag.reply.ReplyConstants
-import com.mymesag.ui.MissedCallReplyActivity
 import com.mymesag.ui.ReplyActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -118,7 +117,7 @@ class NotificationReceiver(
         rebuild(event)
     }
 
-    private fun rebuild(event: NotificationEvent) {
+    private suspend fun rebuild(event: NotificationEvent) {
         ensureChannel()
         val nm = context.getSystemService(NotificationManager::class.java)
 
@@ -136,13 +135,15 @@ class NotificationReceiver(
         val lines = group.toList()
 
         // 构建标题：群聊显示 "群名 · 发言人"，私聊显示 "应用名 · 联系人"
-        val titleText = if (parsed.isGroup && parsed.groupName != null) {
+        val baseTitle = if (parsed.isGroup && parsed.groupName != null) {
             "${parsed.groupName} · $contact"
         } else if (contact.isNotBlank()) {
             "${event.appName} · $contact"
         } else {
             event.appName
         }
+        // 多机配对时，用发送端的自定义设备标签区分来源
+        val titleText = deviceTagPrefix(event) + baseTitle
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_notify)
@@ -165,9 +166,6 @@ class NotificationReceiver(
         if (event.canReply && ReplyConstants.isSupported(event.pkg)) {
             val original = if (contact.isNotBlank()) "$contact：$line" else line
             builder.addAction(buildReplyAction(event, original))
-        }
-        if (isMissedCall(event) && event.phoneNumber.isNotBlank()) {
-            builder.addAction(buildMissedCallReplyAction(event))
         }
         val notification = builder.build()
         try {
@@ -245,6 +243,14 @@ class NotificationReceiver(
         }
     }
 
+    /** 多机配对时，用发送端设备标签作前缀区分来源；单机或无标签则返回空串。 */
+    private suspend fun deviceTagPrefix(event: NotificationEvent): String {
+        if (event.deviceTag.isBlank()) return ""
+        val app = context.applicationContext as MyMesagApp
+        val pairedCount = app.pairingManager.pairedDeviceIds().size
+        return if (pairedCount > 1) "[${event.deviceTag}] " else ""
+    }
+
     private fun buildContentIntent(event: NotificationEvent): PendingIntent {
         val requestCode = event.stableKey.hashCode()
         // 通话类通知点击时打开 MyMesag，而不是跳到本机拨号器（避免误记录通话）
@@ -280,35 +286,6 @@ class NotificationReceiver(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "回复", pi).build()
-    }
-
-    private fun isMissedCall(event: NotificationEvent): Boolean {
-        val content = "${event.title} ${event.text}"
-        val lower = content.lowercase()
-        val strongMissed = content.contains("未接来电") || content.contains("未接來電") ||
-            content.contains("未接听") || content.contains("未接聽") ||
-            lower.contains("missed call") || content.contains("不在着信") ||
-            content.contains("부재중")
-        if (strongMissed) return true
-        val dialerish = event.pkg.contains("dialer") || event.pkg.contains("incallui") ||
-            event.pkg.contains("telecom") || event.pkg.contains("phone") ||
-            event.pkg.contains("contacts")
-        val weakMissed = content.contains("未接") || lower.contains("missed")
-        return dialerish && weakMissed
-    }
-
-    private fun buildMissedCallReplyAction(event: NotificationEvent): NotificationCompat.Action {
-        val intent = Intent(context, MissedCallReplyActivity::class.java).apply {
-            putExtra(MissedCallReplyActivity.EXTRA_PHONE, event.phoneNumber)
-            putExtra(MissedCallReplyActivity.EXTRA_CONTACT, event.contact.ifBlank { event.title })
-            putExtra(MissedCallReplyActivity.EXTRA_TARGET, event.from)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        val pi = PendingIntent.getActivity(
-            context, event.stableKey.hashCode() * 37, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "回复信息", pi).build()
     }
 
     private fun ensureChannel() {

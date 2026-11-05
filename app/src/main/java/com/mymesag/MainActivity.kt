@@ -116,9 +116,7 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED
 
         if (need(Manifest.permission.READ_PHONE_STATE)) permissions.add(Manifest.permission.READ_PHONE_STATE)
-        if (need(Manifest.permission.READ_CALL_LOG)) permissions.add(Manifest.permission.READ_CALL_LOG)
         if (need(Manifest.permission.READ_CONTACTS)) permissions.add(Manifest.permission.READ_CONTACTS)
-        if (need(Manifest.permission.SEND_SMS)) permissions.add(Manifest.permission.SEND_SMS)
         if (Build.VERSION.SDK_INT >= 33 && need(Manifest.permission.POST_NOTIFICATIONS)) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
