@@ -6,7 +6,9 @@ import android.content.pm.PackageManager
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
+import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.MissedCallReplyEvent
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttTopics
@@ -43,8 +45,18 @@ class MissedCallReplyHandler(
     }
 
     private suspend fun handleReply(payload: String) {
+        val envelope = try {
+            json.decodeFromString(EncryptedEnvelope.serializer(), payload)
+        } catch (e: Exception) {
+            Log.e(TAG, "decode envelope error: ${e.message}")
+            return
+        }
+        val plaintext = CryptoManager.decrypt(envelope) ?: run {
+            Log.w(TAG, "decrypt failed for missed call reply")
+            return
+        }
         val event = try {
-            json.decodeFromString(MissedCallReplyEvent.serializer(), payload)
+            json.decodeFromString(MissedCallReplyEvent.serializer(), plaintext)
         } catch (e: Exception) {
             Log.e(TAG, "decode error: ${e.message}")
             return

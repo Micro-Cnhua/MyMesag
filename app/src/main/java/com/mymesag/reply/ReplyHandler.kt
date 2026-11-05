@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
 import com.mymesag.model.AckEvent
+import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.ReplyEvent
 import com.mymesag.model.ReplyResult
 import com.mymesag.network.MqttManager
@@ -50,8 +52,18 @@ class ReplyHandler(
     }
 
     private suspend fun handleReply(payload: String) {
+        val envelope = try {
+            json.decodeFromString(EncryptedEnvelope.serializer(), payload)
+        } catch (e: Exception) {
+            Log.e(TAG, "decode envelope error: ${e.message}")
+            return
+        }
+        val plaintext = CryptoManager.decrypt(envelope) ?: run {
+            Log.w(TAG, "decrypt failed for reply")
+            return
+        }
         val event = try {
-            json.decodeFromString(ReplyEvent.serializer(), payload)
+            json.decodeFromString(ReplyEvent.serializer(), plaintext)
         } catch (e: Exception) {
             Log.e(TAG, "decode error: ${e.message}")
             return

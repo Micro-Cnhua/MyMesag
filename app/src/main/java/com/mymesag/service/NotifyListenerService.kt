@@ -1,10 +1,14 @@
 package com.mymesag.service
 
+import android.Manifest
 import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.provider.CallLog
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.util.LruCache
+import androidx.core.content.ContextCompat
 import com.mymesag.MyMesagApp
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.MqttConnection
@@ -118,7 +122,11 @@ class NotifyListenerService : NotificationListenerService() {
                 }
 
                 val isMissedCall = isMissedCallNotification(pkg, title, text)
-                val phoneNumber = if (isMissedCall) extractPhoneNumber(text) else ""
+                val phoneNumber = if (isMissedCall) {
+                    extractPhoneNumber(title, text).ifBlank { latestMissedCallNumber() }
+                } else {
+                    ""
+                }
                 val effectiveCanReply = canReply || isMissedCall
 
                 val event = NotificationEvent(
@@ -213,19 +221,50 @@ class NotifyListenerService : NotificationListenerService() {
 
     private fun isMissedCallNotification(pkg: String, title: String, text: String): Boolean {
         val content = "$title $text"
-        if (content.contains("未接来电")) return true
-        val missedCallPackages = setOf(
-            "com.android.dialer", "com.android.incallui", "com.android.phone",
-            "com.android.server.telecom", "com.hihonor.incallui",
-            "com.huawei.systemmanager", "com.samsung.android.incallui"
-        )
-        return pkg in missedCallPackages && (title.contains("未接") || text.contains("未接"))
+        val lower = content.lowercase()
+        // 强关键词：多语言「未接来电」，命中即判定（不依赖包名）
+        val strongMissed = content.contains("未接来电") || content.contains("未接來電") ||
+            content.contains("未接听") || content.contains("未接聽") ||
+            lower.contains("missed call") || content.contains("不在着信") ||
+            content.contains("부재중")
+        if (strongMissed) return true
+        // 弱关键词：需来自拨号/电话/联系人相关应用，避免聊天内容误判
+        val dialerish = pkg.contains("dialer") || pkg.contains("incallui") ||
+            pkg.contains("telecom") || pkg.contains("phone") || pkg.contains("contacts")
+        val weakMissed = content.contains("未接") || lower.contains("missed")
+        return dialerish && weakMissed
     }
 
-    private fun extractPhoneNumber(text: String): String {
+    /** 从标题+正文提取号码；很多 ROM 把号码放在标题、正文只写「未接来电」。 */
+    private fun extractPhoneNumber(title: String, text: String): String {
         val regex = Regex("""\+?\d[\d\s\-]{6,}\d""")
-        val match = regex.find(text) ?: return ""
+        val match = regex.find("$title $text") ?: return ""
         return match.value.replace(Regex("[\\s\\-]"), "")
+    }
+
+    /** 号码不在通知文本里时，回退查询通话记录中最近一条未接来电。 */
+    private fun latestMissedCallNumber(): String {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG)
+            != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "READ_CALL_LOG not granted, cannot fall back to call log")
+            return ""
+        }
+        return try {
+            contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls.NUMBER),
+                "${CallLog.Calls.TYPE} = ?",
+                arrayOf(CallLog.Calls.MISSED_TYPE.toString()),
+                "${CallLog.Calls.DATE} DESC LIMIT 1"
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(0)?.replace(Regex("[\\s\\-]"), "") ?: ""
+                } else ""
+            } ?: ""
+        } catch (e: Exception) {
+            Log.e(TAG, "call log query failed: ${e.message}")
+            ""
+        }
     }
 
     private fun sha256(input: String): String =

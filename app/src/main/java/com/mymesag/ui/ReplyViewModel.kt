@@ -1,10 +1,13 @@
 package com.mymesag.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mymesag.MyMesagApp
+import com.mymesag.data.CryptoManager
 import com.mymesag.data.MqttConnection
+import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.ReplyEvent
 import com.mymesag.network.MqttTopics
 import kotlinx.coroutines.launch
@@ -31,8 +34,18 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
                 pkg = pkg,
                 text = text
             )
-            val payload = json.encodeToString(ReplyEvent.serializer(), event)
+            val plaintext = json.encodeToString(ReplyEvent.serializer(), event)
+            val envelope = CryptoManager.encrypt(plaintext, deviceId, targetDeviceId)
+            if (envelope == null) {
+                Log.w(TAG, "no session key for $targetDeviceId, cannot encrypt reply")
+                return@launch
+            }
+            val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
             MqttConnection.manager.publish(MqttTopics.reply(userId, targetDeviceId), payload)
         }
+    }
+
+    companion object {
+        private const val TAG = "ReplyVM"
     }
 }

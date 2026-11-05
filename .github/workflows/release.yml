@@ -54,12 +54,28 @@ jobs:
         id: version
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Extract changelog for this version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [ -f CHANGELOG.md ]; then
+            awk -v tag="## $TAG" '
+              index($0, tag) == 1 { f = 1; next }
+              f && /^## / { exit }
+              f { print }
+            ' CHANGELOG.md > release_notes.md
+          fi
+          # 没有匹配到小节时留空，Release 只显示自动生成的提交记录
+          [ -s release_notes.md ] || echo "本版本暂无手动更新说明。" > release_notes.md
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: app/build/outputs/apk/release/*.apk
+          tag_name: ${{ steps.version.outputs.tag }}
           name: MyMesag ${{ steps.version.outputs.tag }}
+          body_path: release_notes.md
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

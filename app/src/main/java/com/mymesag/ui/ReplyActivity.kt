@@ -16,6 +16,7 @@ class ReplyActivity : ComponentActivity() {
         val pkg = intent.getStringExtra(EXTRA_PKG).orEmpty()
         val target = intent.getStringExtra(EXTRA_TARGET).orEmpty()
         val appName = intent.getStringExtra(EXTRA_APP_NAME).orEmpty()
+        val original = intent.getStringExtra(EXTRA_ORIGINAL).orEmpty()
         if (replyToId.isNullOrEmpty()) {
             finish()
             return
@@ -23,7 +24,7 @@ class ReplyActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    ReplyScreen(replyToId, pkg, target, appName, onDone = { finish() })
+                    ReplyScreen(replyToId, pkg, target, appName, original, onDone = { finish() })
                 }
             }
         }
@@ -34,5 +35,6 @@ class ReplyActivity : ComponentActivity() {
         const val EXTRA_PKG = "extra_pkg"
         const val EXTRA_TARGET = "extra_target"
         const val EXTRA_APP_NAME = "extra_app_name"
+        const val EXTRA_ORIGINAL = "extra_original"
     }
 }

@@ -163,7 +163,8 @@ class NotificationReceiver(
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines.last()))
         }
         if (event.canReply && ReplyConstants.isSupported(event.pkg)) {
-            builder.addAction(buildReplyAction(event))
+            val original = if (contact.isNotBlank()) "$contact：$line" else line
+            builder.addAction(buildReplyAction(event, original))
         }
         if (isMissedCall(event) && event.phoneNumber.isNotBlank()) {
             builder.addAction(buildMissedCallReplyAction(event))
@@ -265,12 +266,13 @@ class NotificationReceiver(
             pkg == "com.huawei.contacts" || pkg == "com.hihonor.contacts" ||
             pkg == "com.hihonor.incallui"
 
-    private fun buildReplyAction(event: NotificationEvent): NotificationCompat.Action {
+    private fun buildReplyAction(event: NotificationEvent, original: String): NotificationCompat.Action {
         val intent = Intent(context, ReplyActivity::class.java).apply {
             putExtra(ReplyActivity.EXTRA_REPLY_TO, event.stableKey)
             putExtra(ReplyActivity.EXTRA_PKG, event.pkg)
             putExtra(ReplyActivity.EXTRA_TARGET, event.from)
             putExtra(ReplyActivity.EXTRA_APP_NAME, event.appName)
+            putExtra(ReplyActivity.EXTRA_ORIGINAL, original)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         val pi = PendingIntent.getActivity(
@@ -282,8 +284,17 @@ class NotificationReceiver(
 
     private fun isMissedCall(event: NotificationEvent): Boolean {
         val content = "${event.title} ${event.text}"
-        return content.contains("未接来电") ||
-            (isCallApp(event.pkg) && (event.title.contains("未接") || event.text.contains("未接")))
+        val lower = content.lowercase()
+        val strongMissed = content.contains("未接来电") || content.contains("未接來電") ||
+            content.contains("未接听") || content.contains("未接聽") ||
+            lower.contains("missed call") || content.contains("不在着信") ||
+            content.contains("부재중")
+        if (strongMissed) return true
+        val dialerish = event.pkg.contains("dialer") || event.pkg.contains("incallui") ||
+            event.pkg.contains("telecom") || event.pkg.contains("phone") ||
+            event.pkg.contains("contacts")
+        val weakMissed = content.contains("未接") || lower.contains("missed")
+        return dialerish && weakMissed
     }
 
     private fun buildMissedCallReplyAction(event: NotificationEvent): NotificationCompat.Action {
