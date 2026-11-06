@@ -264,6 +264,7 @@ fun HomeScreen(
                                 val password = app.mqttConfigStore.savedPassword()
                                 val caCertPem = app.mqttConfigStore.savedCaCertPem()
                                 val willTopic = app.presenceManager.willTopic()
+                                val keepAlive = app.mqttConfigStore.savedKeepAlive()
                                 if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
                                     MqttConnection.manager.connect(
                                         MqttConfig(
@@ -271,6 +272,7 @@ fun HomeScreen(
                                             clientId = clientId,
                                             username = username,
                                             password = password,
+                                            keepAliveSeconds = keepAlive,
                                             willTopic = willTopic,
                                             willPayload = "offline",
                                             caCertPem = caCertPem
@@ -282,21 +284,8 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Text("  强制重连")
+                        Text("  重连MQTT服务器")
                     }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                val userId = app.deviceIdentity.userId()
-                                val deviceId = app.deviceIdentity.deviceId()
-                                val topic = "test/$userId/$deviceId"
-                                val payload = "Diagnostic test at ${System.currentTimeMillis()}"
-                                MqttConnection.manager.publish(topic, payload, qos = 1)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("测试发布消息") }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {

@@ -28,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -36,10 +37,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,9 +52,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mymesag.MyMesagApp
+import com.mymesag.data.MqttConfigStore
+import com.mymesag.data.MqttConnection
+import com.mymesag.network.MqttConfig
 import com.mymesag.notification.KeepAliveGuide
 import com.mymesag.notification.NotificationAccess
 import com.mymesag.notification.RomCompatibility
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SyncSettingsScreen(
@@ -325,6 +334,11 @@ private fun SystemSettingsSection(
     romInstructions: String?,
     romWarning: String?
 ) {
+    val app = context.applicationContext as MyMesagApp
+    val scope = rememberCoroutineScope()
+    var keepAlive by remember { mutableStateOf(MqttConfigStore.DEFAULT_KEEPALIVE) }
+    LaunchedEffect(Unit) { keepAlive = app.mqttConfigStore.savedKeepAlive() }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "系统设置与保活",
@@ -332,6 +346,57 @@ private fun SystemSettingsSection(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(vertical = 8.dp)
         )
+
+        // MQTT 心跳间隔（间隔越长越省电，修改后自动重连生效）
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "MQTT 心跳间隔",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "间隔越长越省电，但断线发现越慢。修改后自动重连生效。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(120, 300, 600, 900).forEach { seconds ->
+                        FilterChip(
+                            selected = keepAlive == seconds,
+                            onClick = {
+                                keepAlive = seconds
+                                scope.launch {
+                                    app.mqttConfigStore.saveKeepAlive(seconds)
+                                    val broker = app.mqttConfigStore.savedBrokerUrl()
+                                    val clientId = app.mqttConfigStore.savedClientId()
+                                    if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
+                                        val username = app.mqttConfigStore.savedUsername()
+                                        val password = app.mqttConfigStore.savedPassword()
+                                        val caCertPem = app.mqttConfigStore.savedCaCertPem()
+                                        val willTopic = app.presenceManager.willTopic()
+                                        MqttConnection.manager.disconnect()
+                                        delay(500)
+                                        MqttConnection.manager.connect(
+                                            MqttConfig(
+                                                brokerUrl = broker, clientId = clientId,
+                                                username = username, password = password,
+                                                keepAliveSeconds = seconds,
+                                                willTopic = willTopic, willPayload = "offline",
+                                                caCertPem = caCertPem
+                                            )
+                                        )
+                                    }
+                                }
+                            },
+                            label = { Text("${seconds}秒") }
+                        )
+                    }
+                }
+            }
+        }
 
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),

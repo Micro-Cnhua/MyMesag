@@ -71,10 +71,12 @@ class MqttForegroundService : Service() {
             val password = app.mqttConfigStore.savedPassword()
             val caCertPem = app.mqttConfigStore.savedCaCertPem()
             val willTopic = app.presenceManager.willTopic()
+            val keepAlive = app.mqttConfigStore.savedKeepAlive()
             if (!MqttConnection.manager.isConnected) {
                 MqttConnection.manager.connect(
                     MqttConfig(
                         brokerUrl = broker, clientId = clientId, username = username, password = password,
+                        keepAliveSeconds = keepAlive,
                         willTopic = willTopic, willPayload = "offline", caCertPem = caCertPem
                     )
                 )

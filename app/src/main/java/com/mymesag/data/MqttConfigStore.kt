@@ -3,6 +3,7 @@ package com.mymesag.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -14,12 +15,19 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
     val brokerUrl: Flow<String?> = dataStore.data.map { it[KEY_BROKER] }
     val clientId: Flow<String?> = dataStore.data.map { it[KEY_CLIENT] }
     val deviceTag: Flow<String?> = dataStore.data.map { it[KEY_DEVICE_TAG] }
+    val keepAliveSeconds: Flow<Int> = dataStore.data.map { it[KEY_KEEPALIVE] ?: DEFAULT_KEEPALIVE }
 
     suspend fun savedBrokerUrl(): String? = dataStore.data.first()[KEY_BROKER]
 
     suspend fun savedClientId(): String? = dataStore.data.first()[KEY_CLIENT]
 
     suspend fun savedDeviceTag(): String? = dataStore.data.first()[KEY_DEVICE_TAG]
+
+    suspend fun savedKeepAlive(): Int = dataStore.data.first()[KEY_KEEPALIVE] ?: DEFAULT_KEEPALIVE
+
+    suspend fun saveKeepAlive(seconds: Int) {
+        dataStore.edit { it[KEY_KEEPALIVE] = seconds }
+    }
 
     suspend fun savedUsername(): String? = dataStore.data.first()[KEY_USERNAME]
 
@@ -70,5 +78,8 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
         private val KEY_PASSWORD = stringPreferencesKey("mqtt_password")
         private val KEY_CA_CERT = stringPreferencesKey("mqtt_ca_cert")
         private val KEY_DEVICE_TAG = stringPreferencesKey("mqtt_device_tag")
+        private val KEY_KEEPALIVE = intPreferencesKey("mqtt_keepalive")
+
+        const val DEFAULT_KEEPALIVE = 120
     }
 }

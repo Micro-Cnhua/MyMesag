@@ -17,6 +17,7 @@ import com.mymesag.model.FilterMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 应用过滤仓库（项目书 2.2 / 8.2）：
@@ -29,6 +30,10 @@ class AppFilterRepository(
     private val dao: AppFilterDao,
     private val dataStore: DataStore<Preferences>
 ) {
+
+    // IME 判定结果缓存：queryIntentServices 是 binder IPC，每条通知都查开销大；
+    // 输入法身份在进程存活期内基本不变，缓存后避免重复 IPC。
+    private val imeCache = ConcurrentHashMap<String, Boolean>()
 
     val filterMode: Flow<FilterMode> = dataStore.data.map { prefs ->
         prefs[KEY_MODE]?.let { runCatching { FilterMode.valueOf(it) }.getOrNull() }
@@ -116,9 +121,9 @@ class AppFilterRepository(
         return isIme(pkg)
     }
 
-    private fun isIme(pkg: String): Boolean {
+    private fun isIme(pkg: String): Boolean = imeCache.getOrPut(pkg) {
         val intent = Intent(InputMethod.SERVICE_INTERFACE).setPackage(pkg)
-        return runCatching {
+        runCatching {
             context.packageManager.queryIntentServices(intent, 0).isNotEmpty()
         }.getOrDefault(false)
     }

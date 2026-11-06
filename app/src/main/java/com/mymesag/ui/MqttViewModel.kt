@@ -60,9 +60,11 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             app.mqttConfigStore.save(broker, cid, user, pass, ca, tag)
             val willTopic = app.presenceManager.willTopic()
+            val keepAlive = app.mqttConfigStore.savedKeepAlive()
             manager.connect(
                 MqttConfig(
                     brokerUrl = broker, clientId = cid, username = user, password = pass,
+                    keepAliveSeconds = keepAlive,
                     willTopic = willTopic, willPayload = "offline", caCertPem = ca
                 )
             )

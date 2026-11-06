@@ -13,11 +13,14 @@ import com.mymesag.model.NotificationEvent
 import com.mymesag.network.MqttTopics
 import com.mymesag.notification.CallReceiver
 import com.mymesag.notification.NotificationExtractor
+import com.mymesag.notification.NotificationParser
 import com.mymesag.notification.NotificationReceiver
 import com.mymesag.reply.ReplyConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
@@ -48,10 +51,32 @@ class NotifyListenerService : NotificationListenerService() {
 
     private lateinit var app: MyMesagApp
 
+    // 提前过滤缓存：发送开关 + 已开启同步的应用白名单（内存常驻，随设置变更实时刷新）。
+    // 命中失败的通知在协程/数据库/IME IPC 之前就被同步丢弃，省去绝大多数无谓开销。
+    @Volatile private var sendEnabledCache = true
+    @Volatile private var enabledPkgsCache: Set<String> = emptySet()
+    @Volatile private var filterCacheReady = false
+
+    // 发布去抖：按 stableKey 合并「解析后消息行相同」的重复更新（如微信 [N条] 计数变化）。
+    // 出现真正的新消息行时立即发出上一条，保证 B 端累积的多条历史不丢失。
+    private class Pending(val event: NotificationEvent, val line: String)
+    private val publishLock = Any()
+    private val pending = HashMap<String, Pending>()
+    private val pendingJobs = HashMap<String, Job>()
+
     override fun onCreate() {
         super.onCreate()
         app = application as MyMesagApp
         Log.i(TAG, "NotifyListenerService created - notification listener is ACTIVE")
+        scope.launch {
+            app.appFilterRepository.syncSendEnabled.collect { sendEnabledCache = it }
+        }
+        scope.launch {
+            app.appFilterRepository.appFilters.collect { list ->
+                enabledPkgsCache = list.filter { it.enabled }.map { it.pkg }.toHashSet()
+                filterCacheReady = true
+            }
+        }
     }
 
     override fun onListenerConnected() {
@@ -73,6 +98,11 @@ class NotifyListenerService : NotificationListenerService() {
             return
         }
         val pkg = sbn.packageName
+        // 提前过滤：发送关闭或应用未开启同步时，直接同步丢弃（不提取内容、不起协程、不查库）。
+        // 缓存就绪后才启用快速路径，避免启动瞬间白名单未加载而误丢通知。
+        if (filterCacheReady && (!sendEnabledCache || pkg !in enabledPkgsCache)) {
+            return
+        }
         val title = NotificationExtractor.title(sbn)
         val text = NotificationExtractor.text(sbn)
 
@@ -135,7 +165,7 @@ class NotifyListenerService : NotificationListenerService() {
                     deviceTag = deviceTag
                 )
 
-                publishEvent(event)
+                schedulePublish(event)
                 Log.d(TAG, "published pkg=$pkg update=$update")
             } catch (e: Exception) {
                 Log.e(TAG, "onNotificationPosted error", e)
@@ -156,10 +186,53 @@ class NotifyListenerService : NotificationListenerService() {
         }
     }
 
+    /**
+     * 发布去抖（按 stableKey）：
+     * - 解析出与待发事件相同的消息行时，视为重复更新（如 [N条] 计数变化），合并为最新一条，延迟发布；
+     * - 出现不同的新消息行时，立即发出上一条再排程新一条，确保 B 端累积的多条历史不丢失；
+     * - 移除事件会调用 [cancelPending] 取消待发，避免清空分组后补发旧消息。
+     */
+    private fun schedulePublish(event: NotificationEvent) {
+        val parsed = NotificationParser.parse(event)
+        val line = parsed.message.ifBlank { event.text }
+        val key = event.stableKey
+        var flushNow: NotificationEvent? = null
+        synchronized(publishLock) {
+            val prev = pending[key]
+            pendingJobs.remove(key)?.cancel()
+            if (prev != null && prev.line != line) {
+                flushNow = prev.event
+                pending.remove(key)
+            }
+            pending[key] = Pending(event, line)
+            pendingJobs[key] = scope.launch {
+                delay(PUBLISH_DEBOUNCE_MS)
+                val ev = synchronized(publishLock) {
+                    pendingJobs.remove(key)
+                    pending.remove(key)?.event
+                }
+                if (ev != null && MqttConnection.manager.isConnected) publishEvent(ev)
+            }
+        }
+        val ev = flushNow
+        if (ev != null && MqttConnection.manager.isConnected) {
+            scope.launch { publishEvent(ev) }
+        }
+    }
+
+    private fun cancelPending(key: String) {
+        synchronized(publishLock) {
+            pendingJobs.remove(key)?.cancel()
+            pending.remove(key)
+        }
+    }
+
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         if (sbn == null) return
         deduplicationManager.remove(sbn.key)
         app.replyActionCache.remove(sbn.key)
+        // 取消该通知待发的去抖发布，避免移除（清空分组）后旧消息又被补发
+        cancelPending(sbn.key)
         // 下发移除事件：让 B 端清空该联系人分组，重新计数
         val pkg = sbn.packageName
         // 用首次采集的标题/正文（移除时通话类通知内容可能已变化，避免分组匹配失败）
@@ -215,5 +288,6 @@ class NotifyListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "NotifyListener"
+        private const val PUBLISH_DEBOUNCE_MS = 300L
     }
 }
