@@ -48,8 +48,8 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
         val broker = brokerUrl.trim()
         val cid = clientId.trim().ifBlank { newClientId() }
         val tag = deviceTag.trim()
-        if (!DEVICE_TAG_REGEX.matches(tag)) {
-            deviceTagError = "设备标签须为 8 位英文或数字"
+        if (tag.isNotEmpty() && !DEVICE_TAG_REGEX.matches(tag)) {
+            deviceTagError = "设备标签须为不超过 8 位英文或数字"
             return
         }
         deviceTagError = null
@@ -93,6 +93,6 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
     private fun newClientId() = "MyMesag-" + UUID.randomUUID().toString().take(8)
 
     companion object {
-        private val DEVICE_TAG_REGEX = Regex("^[A-Za-z0-9]{8}$")
+        private val DEVICE_TAG_REGEX = Regex("^[A-Za-z0-9]{1,8}$")
     }
 }

@@ -25,6 +25,15 @@ object NotificationAccess {
         context.startActivity(intent)
     }
 
+    /** 打开本应用在手机设置中的「应用信息」页（用于管理「允许通知」，与通知监听使用权不同）。 */
+    fun openAppInfo(context: Context) {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.parse("package:${context.packageName}")
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
+
     /**
      * 检测是否为鸿蒙系统（HarmonyOS）。
      * 鸿蒙 4.0+ 对通知监听器有更严格的限制。

@@ -27,11 +27,11 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -79,6 +79,7 @@ fun HomeScreen(
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
 
     val update by updateViewModel.update.collectAsState()
+    val themeMode by ThemeManager.themeMode.collectAsState()
 
     var mqttState by remember { mutableStateOf(MqttConnection.manager.state.value) }
     var notificationAccess by remember { mutableStateOf(false) }
@@ -250,50 +251,38 @@ fun HomeScreen(
 
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("操作", style = MaterialTheme.typography.titleMedium)
+                    Text("快速测试", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    MqttConnection.manager.disconnect()
-                                    delay(500)
-                                    val broker = app.mqttConfigStore.savedBrokerUrl()
-                                    val clientId = app.mqttConfigStore.savedClientId()
-                                    val username = app.mqttConfigStore.savedUsername()
-                                    val password = app.mqttConfigStore.savedPassword()
-                                    val caCertPem = app.mqttConfigStore.savedCaCertPem()
-                                    val willTopic = app.presenceManager.willTopic()
-                                    if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
-                                        MqttConnection.manager.connect(
-                                            MqttConfig(
-                                                brokerUrl = broker,
-                                                clientId = clientId,
-                                                username = username,
-                                                password = password,
-                                                willTopic = willTopic,
-                                                willPayload = "offline",
-                                                caCertPem = caCertPem
-                                            )
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                MqttConnection.manager.disconnect()
+                                delay(500)
+                                val broker = app.mqttConfigStore.savedBrokerUrl()
+                                val clientId = app.mqttConfigStore.savedClientId()
+                                val username = app.mqttConfigStore.savedUsername()
+                                val password = app.mqttConfigStore.savedPassword()
+                                val caCertPem = app.mqttConfigStore.savedCaCertPem()
+                                val willTopic = app.presenceManager.willTopic()
+                                if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
+                                    MqttConnection.manager.connect(
+                                        MqttConfig(
+                                            brokerUrl = broker,
+                                            clientId = clientId,
+                                            username = username,
+                                            password = password,
+                                            willTopic = willTopic,
+                                            willPayload = "offline",
+                                            caCertPem = caCertPem
                                         )
-                                    }
+                                    )
                                 }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text("  强制重连")
-                        }
-                        Button(
-                            onClick = { NotificationAccess.openSettings(context) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text("  通知权限")
-                        }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text("  强制重连")
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
@@ -322,6 +311,41 @@ fun HomeScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("重新绑定通知监听器") }
+                }
+            }
+
+            // 外观主题
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "外观主题",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "切换浅色 / 深色，或跟随系统自动切换",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = themeMode == ThemeMode.SYSTEM,
+                            onClick = { ThemeManager.setThemeMode(ThemeMode.SYSTEM) },
+                            label = { Text("跟随系统") }
+                        )
+                        FilterChip(
+                            selected = themeMode == ThemeMode.LIGHT,
+                            onClick = { ThemeManager.setThemeMode(ThemeMode.LIGHT) },
+                            label = { Text("浅色") }
+                        )
+                        FilterChip(
+                            selected = themeMode == ThemeMode.DARK,
+                            onClick = { ThemeManager.setThemeMode(ThemeMode.DARK) },
+                            label = { Text("深色") }
+                        )
+                    }
                 }
             }
         }

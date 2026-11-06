@@ -101,7 +101,7 @@ fun MqttTestScreen(onBack: () -> Unit, viewModel: MqttViewModel = viewModel()) {
                             viewModel.deviceTag = it.filter(Char::isLetterOrDigit).take(8)
                             viewModel.deviceTagError = null
                         },
-                        label = { Text("设备标签（8位英文/数字）") },
+                        label = { Text("设备标签（不超过8位英文/数字）") },
                         placeholder = { Text("用于多机时区分来源，如 Phone001") },
                         singleLine = true,
                         isError = viewModel.deviceTagError != null,

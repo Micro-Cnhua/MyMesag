@@ -235,12 +235,11 @@ class NotificationReceiver(
     }
 
     private fun groupKey(event: NotificationEvent, parsed: NotificationParser.ParsedNotification): String {
-        // 使用解析后的联系人和分组信息
-        return if (parsed.isGroup && parsed.groupName != null) {
-            "${event.pkg}|group|${parsed.groupName}"
-        } else {
-            "${event.pkg}|${parsed.contact}"
-        }
+        // 以「应用 + 会话名」为稳定分组键：微信/QQ 等群聊 groupName 与私聊 contact 都等于通知标题
+        // （会话名），不随单条正文有无冒号而变化。统一用它可避免同一会话被拆成多组（首条不合并），
+        // 也保证移除事件（用首条标题解析）能匹配并清空对应分组（自动重置）。
+        val conversation = parsed.groupName ?: parsed.contact
+        return "${event.pkg}|$conversation"
     }
 
     /** 多机配对时，用发送端设备标签作前缀区分来源；单机或无标签则返回空串。 */

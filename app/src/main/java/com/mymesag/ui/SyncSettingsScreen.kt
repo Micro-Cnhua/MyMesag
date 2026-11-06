@@ -20,13 +20,14 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mymesag.notification.KeepAliveGuide
+import com.mymesag.notification.NotificationAccess
 import com.mymesag.notification.RomCompatibility
 
 @Composable
@@ -62,7 +64,6 @@ fun SyncSettingsScreen(
     val syncSendEnabled by viewModel.syncSendEnabled.collectAsState()
     val syncReceiveEnabled by viewModel.syncReceiveEnabled.collectAsState()
     val syncVerification by viewModel.syncVerification.collectAsState()
-    val themeMode by ThemeManager.themeMode.collectAsState()
     var showVerifyWarning by remember { mutableStateOf(false) }
 
     val romType = remember { RomCompatibility.detectRomType().name }
@@ -93,6 +94,18 @@ fun SyncSettingsScreen(
             modifier = Modifier.padding(vertical = 8.dp)
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionButton(
+                icon = Icons.Default.Notifications,
+                title = "通知使用权配置",
+                description = "开启通知监听使用权，采集其他应用通知",
+                onClick = { NotificationAccess.openSettings(context) }
+            )
+            ActionButton(
+                icon = Icons.Default.Settings,
+                title = "通知权限",
+                description = "允许通知（本应用通知管理，应用信息页）",
+                onClick = { NotificationAccess.openAppInfo(context) }
+            )
             ActionButton(
                 icon = Icons.Default.Cloud,
                 title = "MQTT 配置",
@@ -162,41 +175,6 @@ fun SyncSettingsScreen(
                 description = "查看在线额外帮助",
                 onClick = onOpenManual
             )
-        }
-
-        // 外观主题
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    "外观主题",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "切换浅色 / 深色，或跟随系统自动切换",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = themeMode == ThemeMode.SYSTEM,
-                        onClick = { ThemeManager.setThemeMode(ThemeMode.SYSTEM) },
-                        label = { Text("跟随系统") }
-                    )
-                    FilterChip(
-                        selected = themeMode == ThemeMode.LIGHT,
-                        onClick = { ThemeManager.setThemeMode(ThemeMode.LIGHT) },
-                        label = { Text("浅色") }
-                    )
-                    FilterChip(
-                        selected = themeMode == ThemeMode.DARK,
-                        onClick = { ThemeManager.setThemeMode(ThemeMode.DARK) },
-                        label = { Text("深色") }
-                    )
-                }
-            }
         }
 
         // 系统设置与保活
