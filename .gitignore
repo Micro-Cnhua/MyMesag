@@ -8,12 +8,18 @@ build/
 
 # Gradle
 .gradle/
+.kotlin/
 gradle-app.setting
 !gradle-wrapper.jar
 captures/
 
+# 全局缓存（位于仓库上层目录，仅作记录；实际由群晖同步规则排除）
+.gradle-home/
+.android-home/
+
 # IDE
 .idea/
+.vscode/
 *.iml
 *.iws
 *.ipr
@@ -36,6 +42,24 @@ app/mymesag-release.jks
 Thumbs.db
 .DS_Store
 
+# 本地数据转储 / 调试脚本 / 服务器凭据（含敏感数据，位于仓库上层目录，仅作记录）
+db_dump/
+db_dump2/
+db_dump3/
+db_dump4/
+dbcheck/
+EQMX.txt
+dump_b_log.py
+dump_datastore.py
+dump_db.py
+final_check.py
+verify_v12.py
+gen_v12.py
+gen_icon.py
+checks-v12.json
+
 # Synology 同步临时文件
 @SynoEAStream
+@tmp
 *.syno
+*.synotmp
