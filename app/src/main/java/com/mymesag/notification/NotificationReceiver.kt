@@ -145,6 +145,10 @@ class NotificationReceiver(
         // 多机配对时，用发送端的自定义设备标签区分来源
         val titleText = deviceTagPrefix(event) + baseTitle
 
+        // 大图标：本地取源应用图标；源应用未安装则回退 MyMesag 默认图标
+        val largeIcon = NotificationIconFactory.sourceIcon(context, event.pkg)
+            ?: NotificationIconFactory.defaultIcon(context)
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setContentTitle(titleText)
@@ -153,6 +157,7 @@ class NotificationReceiver(
             .setContentIntent(buildContentIntent(event))
             .setGroup("mymesag_${event.pkg}") // 原生分组
             .setGroupSummary(false)
+        largeIcon?.let { builder.setLargeIcon(it) }
 
         if (lines.size > 1) {
             // 多条消息：InboxStyle 折叠展示
