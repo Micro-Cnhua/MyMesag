@@ -2,6 +2,7 @@ package com.mymesag.notification
 
 import android.util.Log
 import com.mymesag.data.DeviceIdentity
+import com.mymesag.data.followUserIdSubscription
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttState
 import com.mymesag.network.MqttTopics
@@ -24,10 +25,7 @@ class PresenceManager(
     private var published = false
 
     fun start() {
-        scope.launch {
-            val userId = deviceIdentity.userId()
-            manager.subscribe(MqttTopics.presenceWildcard(userId))
-        }
+        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.presenceWildcard(it) }, TAG)
         scope.launch {
             manager.state.collect { state ->
                 if (state == MqttState.CONNECTED) {

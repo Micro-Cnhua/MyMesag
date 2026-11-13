@@ -21,6 +21,7 @@ import com.mymesag.notification.NotificationReceiver
 import com.mymesag.notification.PresenceManager
 import com.mymesag.pairing.PairingManager
 import com.mymesag.reply.ReplyActionCache
+import com.mymesag.reply.ReplyAckReceiver
 import com.mymesag.reply.ReplyHandler
 import com.mymesag.service.CallListener
 import com.mymesag.service.MqttForegroundService
@@ -54,6 +55,8 @@ class MyMesagApp : Application() {
 
     val presenceManager: PresenceManager by lazy { PresenceManager(MqttConnection.manager, deviceIdentity) }
 
+    val replyAckReceiver: ReplyAckReceiver by lazy { ReplyAckReceiver(MqttConnection.manager, deviceIdentity) }
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // 会话密钥加载完成标志（避免消息到达时密钥未加载）
@@ -86,6 +89,8 @@ class MyMesagApp : Application() {
         NotificationReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端回复处理：订阅 reply/{userId}/+ 并执行回复、回传 ack
         ReplyHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache).start()
+        // B 端回执接收：订阅 ack/{userId}/+，把真实原因码交给回复界面
+        replyAckReceiver.start()
         // B 端来电显示：订阅 call/{userId}/+
         CallReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端来电监听：监听通话状态并发布 CallEvent

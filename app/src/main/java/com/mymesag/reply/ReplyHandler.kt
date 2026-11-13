@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
+import com.mymesag.data.followUserIdSubscription
 import com.mymesag.model.AckEvent
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.ReplyEvent
@@ -34,16 +35,7 @@ class ReplyHandler(
     private val json = Json { encodeDefaults = true }
 
     fun start() {
-        scope.launch {
-            try {
-                val userId = deviceIdentity.userId()
-                val topic = MqttTopics.replyWildcard(userId)
-                Log.d(TAG, "subscribe $topic")
-                manager.subscribe(topic)
-            } catch (e: Exception) {
-                Log.e(TAG, "subscribe error", e)
-            }
-        }
+        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.replyWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("reply/")) handleReply(msg.payload)
@@ -109,7 +101,8 @@ class ReplyHandler(
             to = event.from,
             ts = System.currentTimeMillis(),
             replyToId = event.replyToId,
-            reason = reason
+            reason = reason,
+            replyId = event.id
         )
         val payload = json.encodeToString(AckEvent.serializer(), ack)
         manager.publish(MqttTopics.ack(userId, event.from), payload)

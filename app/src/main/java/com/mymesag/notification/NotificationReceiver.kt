@@ -14,6 +14,7 @@ import com.mymesag.MyMesagApp
 import com.mymesag.R
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
+import com.mymesag.data.followUserIdSubscription
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.NotificationEvent
 import com.mymesag.network.MqttManager
@@ -44,16 +45,7 @@ class NotificationReceiver(
     private val groups = mutableMapOf<String, MutableList<String>>()
 
     fun start() {
-        scope.launch {
-            try {
-                val userId = deviceIdentity.userId()
-                val topic = MqttTopics.notifyWildcard(userId)
-                Log.d(TAG, "subscribe $topic")
-                manager.subscribe(topic)
-            } catch (e: Exception) {
-                Log.e(TAG, "subscribe error", e)
-            }
-        }
+        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.notifyWildcard(it) }, TAG)
         scope.launch {
             // 等待会话密钥加载完成再处理消息
             val app = context.applicationContext as MyMesagApp

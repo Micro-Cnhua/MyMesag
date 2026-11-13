@@ -162,6 +162,20 @@ class MqttManager(private val scope: CoroutineScope) {
         }
     }
 
+    /** 退订并从订阅表移除，避免重连时用旧主题重新订阅（userId 变化后重建订阅用）。 */
+    fun unsubscribe(topic: String) {
+        if (topic.isBlank()) return
+        subscriptions.removeIf { it.first == topic }
+        val c = client ?: return
+        if (!c.isConnected) return
+        try {
+            c.unsubscribe(topic)
+            Log.d(TAG, "unsubscribe topic=$topic")
+        } catch (e: MqttException) {
+            Log.e(TAG, "unsubscribe exception: ${e.message}", e)
+        }
+    }
+
     fun publish(topic: String, payload: String, qos: Int = 1, retained: Boolean = false) {
         val c = client ?: return
         if (!c.isConnected) return

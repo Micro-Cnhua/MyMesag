@@ -12,5 +12,7 @@ data class AckEvent(
     val to: String,
     val ts: Long,
     val replyToId: String,
-    val reason: String
+    val reason: String,
+    /** 回显触发本次回执的 ReplyEvent.id，供发送端精确匹配（旧版本为空时回退按 replyToId 匹配）。 */
+    val replyId: String = ""
 )

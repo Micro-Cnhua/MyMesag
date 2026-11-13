@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mymesag.R
 import com.mymesag.data.DeviceIdentity
+import com.mymesag.data.followUserIdSubscription
 import com.mymesag.model.CallEvent
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttTopics
@@ -29,16 +30,7 @@ class CallReceiver(
     private val json = Json { ignoreUnknownKeys = true }
 
     fun start() {
-        scope.launch {
-            try {
-                val userId = deviceIdentity.userId()
-                val topic = MqttTopics.callWildcard(userId)
-                Log.d(TAG, "subscribe $topic")
-                manager.subscribe(topic)
-            } catch (e: Exception) {
-                Log.e(TAG, "subscribe error", e)
-            }
-        }
+        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.callWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("call/")) handleCall(msg.payload)
