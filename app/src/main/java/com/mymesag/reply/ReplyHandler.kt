@@ -86,10 +86,27 @@ class ReplyHandler(
             RemoteInput.addResultsToIntent(remoteInputs, intent, bundle)
             action.actionIntent.send(context, 0, intent)
             Log.d(TAG, "reply sent replyToId=${event.replyToId} pkg=${event.pkg}")
+            markReadIfSms(event)
             ack(event, myId, ReplyResult.OK)
         } catch (e: Exception) {
             Log.w(TAG, "reply failed: ${e.message}", e)
             ack(event, myId, ReplyResult.NO_REPLY_ACTION)
+        }
+    }
+
+    /** 短信回复成功后，自动触发同通知里「回复」旁边的「标记为已读」快捷动作（尽力而为）。 */
+    private fun markReadIfSms(event: ReplyEvent) {
+        if (!ReplyConstants.isSms(event.pkg)) return
+        val readAction = cache.getReadAction(event.replyToId) ?: run {
+            Log.d(TAG, "no mark-read action replyToId=${event.replyToId}")
+            return
+        }
+        val pi = readAction.actionIntent ?: return
+        try {
+            pi.send(context, 0, null)
+            Log.d(TAG, "marked read replyToId=${event.replyToId} pkg=${event.pkg}")
+        } catch (e: Exception) {
+            Log.w(TAG, "mark read failed: ${e.message}", e)
         }
     }
 

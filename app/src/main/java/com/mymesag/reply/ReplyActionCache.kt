@@ -10,22 +10,38 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ReplyActionCache {
 
-    private data class Cached(val action: Notification.Action, val ts: Long)
+    private data class Cached(
+        val action: Notification.Action,
+        val readAction: Notification.Action?,
+        val ts: Long
+    )
 
     private val map = ConcurrentHashMap<String, Cached>()
 
-    fun put(stableKey: String, action: Notification.Action) {
-        map[stableKey] = Cached(action, System.currentTimeMillis())
+    fun put(stableKey: String, action: Notification.Action, readAction: Notification.Action? = null) {
+        map[stableKey] = Cached(action, readAction, System.currentTimeMillis())
     }
 
     fun get(stableKey: String): Notification.Action? {
         val cached = map[stableKey] ?: return null
+        if (expired(stableKey, cached)) return null
+        return cached.action
+    }
+
+    /** 取同通知里「回复」旁边的「标记为已读」动作（可能不存在）。 */
+    fun getReadAction(stableKey: String): Notification.Action? {
+        val cached = map[stableKey] ?: return null
+        if (expired(stableKey, cached)) return null
+        return cached.readAction
+    }
+
+    private fun expired(stableKey: String, cached: Cached): Boolean {
         if (System.currentTimeMillis() - cached.ts > EXPIRY_MS) {
             map.remove(stableKey)
             Log.d(TAG, "expired action stableKey=$stableKey")
-            return null
+            return true
         }
-        return cached.action
+        return false
     }
 
     fun remove(stableKey: String) {

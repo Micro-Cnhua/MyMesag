@@ -145,7 +145,10 @@ class NotifyListenerService : NotificationListenerService() {
                     ?.firstOrNull { it.remoteInputs?.isNotEmpty() == true }
                 val canReply = replyAction != null && ReplyConstants.isSupported(pkg)
                 if (replyAction != null && canReply) {
-                    app.replyActionCache.put(stableKey, replyAction)
+                    // 同通知里「回复」旁边的「标记为已读」快捷动作（回复成功后自动触发）
+                    val readAction = sbn.notification.actions
+                        ?.firstOrNull { it !== replyAction && ReplyConstants.isMarkReadTitle(it.title?.toString()) }
+                    app.replyActionCache.put(stableKey, replyAction, readAction)
                 }
 
                 val event = NotificationEvent(
