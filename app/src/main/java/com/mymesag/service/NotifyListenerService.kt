@@ -10,6 +10,7 @@ import com.mymesag.data.CryptoManager
 import com.mymesag.data.MqttConnection
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.NotificationEvent
+import com.mymesag.network.MqttState
 import com.mymesag.network.MqttTopics
 import com.mymesag.notification.CallReceiver
 import com.mymesag.notification.NotificationExtractor
@@ -77,6 +78,26 @@ class NotifyListenerService : NotificationListenerService() {
                 filterCacheReady = true
             }
         }
+        // 断线补全：MQTT 每次（重）连上后扫描通知栏，把断线期间遗漏、仍未同步的通知补发。
+        // 以持久化"已同步指纹"为判据，不会重发已同步过的；节流避免网络抖动时反复扫描。
+        scope.launch {
+            var prevConnected = false
+            var lastRescan = 0L
+            MqttConnection.manager.state.collect { st ->
+                val connected = st == MqttState.CONNECTED
+                if (connected && !prevConnected) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastRescan >= RESCAN_MIN_INTERVAL_MS) {
+                        lastRescan = now
+                        scope.launch {
+                            runCatching { rescanUnsynced() }
+                                .onFailure { Log.w(TAG, "rescan error: ${it.message}", it) }
+                        }
+                    }
+                }
+                prevConnected = connected
+            }
+        }
     }
 
     override fun onListenerConnected() {
@@ -117,6 +138,12 @@ class NotifyListenerService : NotificationListenerService() {
                 // 使用优化的去重管理器
                 if (deduplicationManager.isDuplicate(stableKey, "$title\n$text")) {
                     Log.d(TAG, "dedup unchanged stableKey=$stableKey")
+                    return@launch
+                }
+
+                // 持久判重：已同步过且内容未变的通知不再重发（进程重启后依然有效，避免与补发扫描重复）
+                if (app.syncedNotifyStore.contains(fingerprint(stableKey, title, text))) {
+                    Log.d(TAG, "already synced, skip stableKey=$stableKey")
                     return@launch
                 }
                 
@@ -182,11 +209,100 @@ class NotifyListenerService : NotificationListenerService() {
         val topic = MqttTopics.notify(userId, deviceId)
         val plaintext = json.encodeToString(NotificationEvent.serializer(), event)
         // 多设备两两密钥：按每个接收方分别加密，接收方凭 recipientDeviceId 过滤
+        var published = false
         for (peerId in app.pairingManager.pairedDeviceIds()) {
             val envelope = CryptoManager.encrypt(plaintext, deviceId, peerId) ?: continue
             val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
             MqttConnection.manager.publish(topic, payload)
+            published = true
         }
+        // 真正发出后才记入"已同步指纹"，供断线补全判重（移除事件不计）
+        if (published && event.type != "remove") {
+            app.syncedNotifyStore.add(listOf(fingerprint(event.stableKey, event.title, event.text)))
+        }
+    }
+
+    /** 同步指纹：稳定通知 ID + 内容哈希。内容变化即视为新消息，需重新同步。 */
+    private fun fingerprint(stableKey: String, title: String, text: String): String =
+        stableKey + ":" + sha256("$title\n$text")
+
+    /**
+     * 断线补全扫描：枚举当前通知栏存活通知，把"近期、受支持、且从未同步过"的遗漏通知补发。
+     * 以持久化已同步指纹为唯一判据（绕过内存 dedup），按 postTime 升序补发保证接收端顺序。
+     * 只能补回仍挂在通知栏的通知；已被划掉/读掉而消失的无法补回。
+     */
+    private suspend fun rescanUnsynced() {
+        if (!filterCacheReady || !sendEnabledCache) return
+        app.awaitSessionKeys()
+        val actives = try {
+            activeNotifications
+        } catch (e: Exception) {
+            Log.w(TAG, "getActiveNotifications failed: ${e.message}")
+            return
+        } ?: return
+        if (actives.isEmpty()) return
+
+        val synced = app.syncedNotifyStore.snapshot().toMutableSet()
+        val now = System.currentTimeMillis()
+        val candidates = actives
+            .filter { sbn ->
+                sbn.tag != NotificationReceiver.SYNCED_TAG && sbn.tag != CallReceiver.CALL_TAG &&
+                    sbn.packageName in enabledPkgsCache &&
+                    now - sbn.postTime <= RESCAN_MAX_AGE_MS
+            }
+            .sortedBy { it.postTime }
+
+        var resent = 0
+        for (sbn in candidates) {
+            if (!MqttConnection.manager.isConnected) break
+            val pkg = sbn.packageName
+            val title = NotificationExtractor.title(sbn)
+            val text = NotificationExtractor.text(sbn)
+            val stableKey = sbn.key
+            val fp = fingerprint(stableKey, title, text)
+            if (fp in synced) continue
+            // 正在去抖待发的跳过，避免与实时路径重复补发
+            if (synchronized(publishLock) { pending.containsKey(stableKey) }) continue
+            if (!app.appFilterRepository.shouldSync(pkg, title, text)) continue
+
+            val contact = computeContact(title, text)
+            val update = capturedTitle.get(stableKey) != null
+            if (!update) {
+                capturedTitle.put(stableKey, title)
+                capturedText.put(stableKey, text)
+                capturedContact.put(stableKey, contact)
+            }
+            val replyAction = sbn.notification.actions
+                ?.firstOrNull { it.remoteInputs?.isNotEmpty() == true }
+            val canReply = replyAction != null && ReplyConstants.isSupported(pkg)
+            if (replyAction != null && canReply) {
+                val readAction = sbn.notification.actions
+                    ?.firstOrNull { it !== replyAction && ReplyConstants.isMarkReadTitle(it.title?.toString()) }
+                app.replyActionCache.put(stableKey, replyAction, readAction)
+            }
+
+            val event = NotificationEvent(
+                id = UUID.randomUUID().toString(),
+                from = app.deviceIdentity.deviceId(),
+                ts = System.currentTimeMillis(),
+                seq = seq.incrementAndGet(),
+                stableKey = stableKey,
+                update = update,
+                pkg = pkg,
+                appName = appLabel(pkg),
+                title = title,
+                text = text,
+                contact = contact,
+                priority = sbn.notification.priority,
+                canReply = canReply,
+                deviceTag = app.mqttConfigStore.savedDeviceTag() ?: ""
+            )
+            publishEvent(event)
+            synced.add(fp)
+            resent++
+            Log.d(TAG, "rescan resent pkg=$pkg stableKey=$stableKey")
+        }
+        if (resent > 0) Log.i(TAG, "rescan completed, resent $resent missed notifications")
     }
 
     /**
@@ -292,5 +408,10 @@ class NotifyListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotifyListener"
         private const val PUBLISH_DEBOUNCE_MS = 300L
+
+        // 补全扫描只补最近 24h 内到达的通知，避免把很久以前的历史通知当遗漏洪水补发
+        private const val RESCAN_MAX_AGE_MS = 24L * 60 * 60 * 1000
+        // 两次扫描最小间隔，防止网络反复重连时频繁扫描
+        private const val RESCAN_MIN_INTERVAL_MS = 30_000L
     }
 }

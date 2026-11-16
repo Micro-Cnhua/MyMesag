@@ -36,6 +36,14 @@ class MqttForegroundService : Service() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, buildNotification())
         registerNetworkCallback()
+        // 注入免费的本地网络可用性判断：重连前先查 ConnectivityManager（不发起网络 I/O、不唤醒射频），
+        // 网络不通则跳过试连。用 applicationContext 避免 lambda 持有 Service 实例。
+        val appContext = applicationContext
+        MqttConnection.manager.networkAvailable = {
+            val cm = appContext.getSystemService(ConnectivityManager::class.java)
+            val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+            caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        }
         autoConnect()
     }
 

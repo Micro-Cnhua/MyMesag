@@ -71,6 +71,16 @@ class MqttManager(private val scope: CoroutineScope) {
     private val maxReconnectAttempts = 10
     private val baseReconnectDelayMs = 2000L
 
+    /** 快速退避用尽后的降频间隔：断线期间每隔此时长才真正试连一次（不再永久放弃）。 */
+    private val plateauReconnectDelayMs = 60_000L
+
+    /**
+     * 本地网络是否可用（免费查询，不唤醒射频）。由 app 层注入 ConnectivityManager 判断；
+     * 每次真正试连前先调用它把关，网络不通则跳过本次尝试。默认恒 true（未注入时不拦截）。
+     */
+    @Volatile
+    var networkAvailable: () -> Boolean = { true }
+
     private var cachedSslSocketFactory: SSLSocketFactory? = null
     private var cachedCaCertPem: String? = null
 
@@ -81,6 +91,7 @@ class MqttManager(private val scope: CoroutineScope) {
             Log.d(TAG, "connectComplete reconnect=$reconnect server=$serverURI")
             _state.value = MqttState.CONNECTED
             reconnectAttempts = 0
+            reconnectJob?.cancel()
             resubscribeAll()
         }
 
@@ -211,20 +222,29 @@ class MqttManager(private val scope: CoroutineScope) {
         lastConfig?.let { doConnect(it) }
     }
 
-    private fun scheduleReconnect() {
+    private fun scheduleReconnect(forcePlateau: Boolean = false) {
         if (manuallyDisconnected) return
-        if (reconnectAttempts >= maxReconnectAttempts) {
-            Log.e(TAG, "max reconnect attempts reached, giving up")
-            _state.value = MqttState.ERROR
-            return
-        }
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            val delayMs = baseReconnectDelayMs * (1 shl reconnectAttempts.coerceAtMost(6))
-            Log.d(TAG, "scheduling reconnect attempt ${reconnectAttempts + 1} in ${delayMs}ms")
+            // 断线门控：已连接则不再重连
+            if (isConnected) return@launch
+            // 降频：快速退避（最多 maxReconnectAttempts 次）用尽后，转为固定长间隔永续重试，不再永久放弃
+            val fast = !forcePlateau && reconnectAttempts < maxReconnectAttempts
+            val delayMs = if (fast) {
+                baseReconnectDelayMs * (1 shl reconnectAttempts.coerceAtMost(6))
+            } else {
+                plateauReconnectDelayMs
+            }
+            Log.d(TAG, "reconnect attempt ${reconnectAttempts + 1} in ${delayMs}ms (fast=$fast)")
             _state.value = MqttState.RECONNECTING
             kotlinx.coroutines.delay(delayMs)
-            if (manuallyDisconnected) return@launch
+            if (manuallyDisconnected || isConnected) return@launch
+            // 免费前置判断：本地网络不通就跳过本次试连（不唤醒射频、不计失败次数），降频后再查
+            if (!networkAvailable()) {
+                Log.d(TAG, "network unavailable, skip reconnect attempt")
+                scheduleReconnect(forcePlateau = true)
+                return@launch
+            }
             reconnectAttempts++
             cleanupClient()
             lastConfig?.let { doConnect(it) }

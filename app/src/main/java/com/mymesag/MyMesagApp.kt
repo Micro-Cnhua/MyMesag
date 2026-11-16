@@ -15,6 +15,7 @@ import com.mymesag.data.DeviceIdentity
 import com.mymesag.data.MqttConfigStore
 import com.mymesag.data.MqttConnection
 import com.mymesag.data.SecureStorage
+import com.mymesag.data.SyncedNotifyStore
 import com.mymesag.data.db.AppDatabase
 import com.mymesag.notification.CallReceiver
 import com.mymesag.notification.NotificationReceiver
@@ -46,6 +47,8 @@ class MyMesagApp : Application() {
     }
 
     val replyActionCache: ReplyActionCache by lazy { ReplyActionCache() }
+
+    val syncedNotifyStore: SyncedNotifyStore by lazy { SyncedNotifyStore(dataStore) }
 
     val secureStorage: SecureStorage by lazy { SecureStorage() }
 
