@@ -24,5 +24,8 @@ object MqttTopics {
     fun config(userId: String, deviceId: String) = "config/$userId/$deviceId"
     fun configWildcard(userId: String) = "config/$userId/+"
 
+    fun syncReq(userId: String, deviceId: String) = "syncreq/$userId/$deviceId"
+    fun syncReqWildcard(userId: String) = "syncreq/$userId/+"
+
     fun pair(userId: String) = "pair/$userId"
 }

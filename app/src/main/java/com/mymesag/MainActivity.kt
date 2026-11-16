@@ -31,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.mymesag.data.MqttAutoConnect
 import com.mymesag.ui.AppSelectScreen
 import com.mymesag.ui.HomeScreen
 import com.mymesag.ui.MqttTestScreen
@@ -38,6 +40,7 @@ import com.mymesag.ui.MyMesagTheme
 import com.mymesag.ui.PairScreen
 import com.mymesag.ui.SyncSettingsScreen
 import com.mymesag.ui.UserManualScreen
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,6 +111,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 回前台兜底：无论进程/前台服务是否重建，打开 App 即确保 MQTT 已连接（已连接则直接返回）。
+        val app = application as MyMesagApp
+        lifecycleScope.launch { MqttAutoConnect.ensureConnected(app) }
     }
 
     private fun requestRuntimePermissions() {

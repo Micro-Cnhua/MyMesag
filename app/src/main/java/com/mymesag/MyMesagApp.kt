@@ -13,13 +13,17 @@ import com.mymesag.data.AppFilterRepository
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
 import com.mymesag.data.MqttConfigStore
+import com.mymesag.data.MqttAutoConnect
 import com.mymesag.data.MqttConnection
+import com.mymesag.data.ReceivedNotifyStore
 import com.mymesag.data.SecureStorage
+import com.mymesag.data.SentNotifyCache
 import com.mymesag.data.SyncedNotifyStore
 import com.mymesag.data.db.AppDatabase
 import com.mymesag.notification.CallReceiver
 import com.mymesag.notification.NotificationReceiver
 import com.mymesag.notification.PresenceManager
+import com.mymesag.notification.SyncRequestHandler
 import com.mymesag.pairing.PairingManager
 import com.mymesag.reply.ReplyActionCache
 import com.mymesag.reply.ReplyAckReceiver
@@ -49,6 +53,14 @@ class MyMesagApp : Application() {
     val replyActionCache: ReplyActionCache by lazy { ReplyActionCache() }
 
     val syncedNotifyStore: SyncedNotifyStore by lazy { SyncedNotifyStore(dataStore) }
+
+    val sentNotifyCache: SentNotifyCache by lazy { SentNotifyCache(dataStore) }
+
+    val receivedNotifyStore: ReceivedNotifyStore by lazy { ReceivedNotifyStore(dataStore) }
+
+    val syncRequestHandler: SyncRequestHandler by lazy {
+        SyncRequestHandler(this, MqttConnection.manager, deviceIdentity, sentNotifyCache)
+    }
 
     val secureStorage: SecureStorage by lazy { SecureStorage() }
 
@@ -90,6 +102,8 @@ class MyMesagApp : Application() {
         }
         // B 端通知还原：订阅 notify/{userId}/+ 并处理收到的通知事件
         NotificationReceiver(this, MqttConnection.manager, deviceIdentity).start()
+        // B 端补发响应：订阅 syncreq/{userId}/+，响应接收端重连后的补全请求
+        syncRequestHandler.start()
         // A 端回复处理：订阅 reply/{userId}/+ 并执行回复、回传 ack
         ReplyHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache).start()
         // B 端回执接收：订阅 ack/{userId}/+，把真实原因码交给回复界面
@@ -122,10 +136,17 @@ class MyMesagApp : Application() {
 
     private fun startKeepAliveService() {
         val intent = Intent(this, MqttForegroundService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            // Android 12+ 后台启动前台服务受限等情况下服务可能起不来，
+            // 兜底直接发起 MQTT 连接，避免"服务没起来就完全不连"。
+            Log.w(TAG, "start foreground service failed, fallback to direct connect", e)
+            appScope.launch { MqttAutoConnect.ensureConnected(this@MyMesagApp) }
         }
     }
 

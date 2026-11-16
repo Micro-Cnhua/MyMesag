@@ -219,6 +219,8 @@ class NotifyListenerService : NotificationListenerService() {
         // 真正发出后才记入"已同步指纹"，供断线补全判重（移除事件不计）
         if (published && event.type != "remove") {
             app.syncedNotifyStore.add(listOf(fingerprint(event.stableKey, event.title, event.text)))
+            // 记录完整内容（含原始 ts），供接收端重连时请求重放
+            app.sentNotifyCache.record(event)
         }
     }
 

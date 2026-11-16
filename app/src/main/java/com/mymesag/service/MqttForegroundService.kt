@@ -16,13 +16,12 @@ import androidx.core.app.NotificationCompat
 import com.mymesag.MainActivity
 import com.mymesag.MyMesagApp
 import com.mymesag.R
+import com.mymesag.data.MqttAutoConnect
 import com.mymesag.data.MqttConnection
-import com.mymesag.network.MqttConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 /**
  * 前台服务（阶段 6）：常驻通知保活 + 自动连接 MQTT + 网络切换监听（网络恢复时主动重连）。
@@ -58,38 +57,7 @@ class MqttForegroundService : Service() {
 
     private fun autoConnect() {
         val app = application as MyMesagApp
-        scope.launch {
-            val broker = app.mqttConfigStore.savedBrokerUrl()
-            if (broker.isNullOrBlank()) {
-                Log.d(TAG, "no saved broker config, skip auto connect")
-                return@launch
-            }
-            var clientId = app.mqttConfigStore.savedClientId()
-            if (clientId.isNullOrBlank()) {
-                // 首次连接或数据丢失，生成并保存 clientId
-                clientId = "MyMesag-${UUID.randomUUID().toString().take(8)}"
-                Log.i(TAG, "generated new clientId: $clientId")
-                val username = app.mqttConfigStore.savedUsername()
-                val password = app.mqttConfigStore.savedPassword()
-                val caCertPem = app.mqttConfigStore.savedCaCertPem()
-                val deviceTag = app.mqttConfigStore.savedDeviceTag()
-                app.mqttConfigStore.save(broker, clientId, username, password, caCertPem, deviceTag)
-            }
-            val username = app.mqttConfigStore.savedUsername()
-            val password = app.mqttConfigStore.savedPassword()
-            val caCertPem = app.mqttConfigStore.savedCaCertPem()
-            val willTopic = app.presenceManager.willTopic()
-            val keepAlive = app.mqttConfigStore.savedKeepAlive()
-            if (!MqttConnection.manager.isConnected) {
-                MqttConnection.manager.connect(
-                    MqttConfig(
-                        brokerUrl = broker, clientId = clientId, username = username, password = password,
-                        keepAliveSeconds = keepAlive,
-                        willTopic = willTopic, willPayload = "offline", caCertPem = caCertPem
-                    )
-                )
-            }
-        }
+        scope.launch { MqttAutoConnect.ensureConnected(app) }
     }
 
     private fun buildNotification(): Notification {

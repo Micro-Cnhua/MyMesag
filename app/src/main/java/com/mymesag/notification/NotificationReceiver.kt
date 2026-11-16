@@ -17,16 +17,25 @@ import com.mymesag.data.DeviceIdentity
 import com.mymesag.data.followUserIdSubscription
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.NotificationEvent
+import com.mymesag.model.SyncDoneEvent
+import com.mymesag.model.SyncRequestEvent
 import com.mymesag.network.MqttManager
+import com.mymesag.network.MqttState
 import com.mymesag.network.MqttTopics
 import com.mymesag.reply.ReplyConstants
 import com.mymesag.ui.ReplyActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import java.security.MessageDigest
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * B 端通知还原（阶段 3）：
@@ -39,23 +48,44 @@ class NotificationReceiver(
     private val deviceIdentity: DeviceIdentity
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     // 按应用分组的消息累积（简单版：同一应用折叠成一条，展开看多条）
     private val groups = mutableMapOf<String, MutableList<String>>()
 
+    // 断线补全：每个发送端 B 是否仍待补全；收到其 SyncDone 即置 false 停止重试
+    private val pendingRecovery = ConcurrentHashMap<String, Boolean>()
+    private var retryJob: Job? = null
+
     fun start() {
         scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.notifyWildcard(it) }, TAG)
+        // 订阅 syncreq 通道以接收 B 的补全完成信号（SyncDone）
+        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
         scope.launch {
             // 等待会话密钥加载完成再处理消息
             val app = context.applicationContext as MyMesagApp
             app.awaitSessionKeys()
             Log.d(TAG, "session keys loaded, starting message processing")
-            
+
             manager.messages.collect { msg ->
-                if (msg.topic.startsWith("notify/")) {
-                    handleNotification(msg.payload)
+                when {
+                    msg.topic.startsWith("notify/") -> handleNotification(msg.payload)
+                    msg.topic.startsWith("syncreq/") -> handleSyncDone(msg.payload)
                 }
+            }
+        }
+        // 重连触发补全请求 + 重试；再次断线则取消重试
+        scope.launch {
+            var prevConnected = false
+            manager.state.collect { st ->
+                val connected = st == MqttState.CONNECTED
+                if (connected && !prevConnected) {
+                    onReconnected()
+                } else if (!connected && prevConnected) {
+                    retryJob?.cancel()
+                    pendingRecovery.clear()
+                }
+                prevConnected = connected
             }
         }
     }
@@ -88,6 +118,8 @@ class NotificationReceiver(
             Log.d(TAG, "skip self message from=${event.from}")
             return
         }
+        // 推进该发送端的接收水位（用事件原始 ts，B 时钟域），供下次重连增量补全
+        app.receivedNotifyStore.advanceWatermark(event.from, event.ts)
         // 移除事件：清空该联系人分组，重新计数
         if (event.type == "remove") {
             val parsed = NotificationParser.parse(event)
@@ -110,6 +142,14 @@ class NotificationReceiver(
     }
 
     private suspend fun rebuild(event: NotificationEvent) {
+        // 持久指纹去重：重放/重复通知不再重复堆叠（进程重启后依然有效）
+        val app = context.applicationContext as MyMesagApp
+        val fp = fingerprint(event)
+        if (app.receivedNotifyStore.contains(fp)) {
+            Log.d(TAG, "duplicate notify skipped stableKey=${event.stableKey}")
+            return
+        }
+        app.receivedNotifyStore.addFingerprint(fp)
         ensureChannel()
         val nm = context.getSystemService(NotificationManager::class.java)
 
@@ -292,11 +332,81 @@ class NotificationReceiver(
         nm.createNotificationChannel(channel)
     }
 
+    /** 接收指纹：稳定通知 ID + 内容哈希，用于持久去重。 */
+    private fun fingerprint(event: NotificationEvent): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("${event.title}\n${event.text}".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return event.stableKey + ":" + digest
+    }
+
+    /** 重连后向每个配对发送端请求补全，并周期重试直到收到各自 SyncDone 或次数用尽。 */
+    private fun onReconnected() {
+        retryJob?.cancel()
+        pendingRecovery.clear()
+        retryJob = scope.launch {
+            val app = context.applicationContext as MyMesagApp
+            app.awaitSessionKeys()
+            if (!app.appFilterRepository.syncReceiveEnabled.first()) return@launch
+            val myId = deviceIdentity.deviceId()
+            val userId = deviceIdentity.userId()
+            val peers = app.pairingManager.pairedDeviceIds()
+            if (peers.isEmpty()) return@launch
+            peers.forEach { pendingRecovery[it] = true }
+            // 首轮立即请求
+            peers.forEach { sendSyncRequest(userId, myId, it) }
+            // 重试：每 RETRY_INTERVAL_MS 一轮，最多 MAX_RETRY 轮，全部补全即停
+            var round = 0
+            while (isActive && round < MAX_RETRY && pendingRecovery.values.any { it }) {
+                delay(RETRY_INTERVAL_MS)
+                round++
+                if (!manager.isConnected) break
+                peers.forEach { b -> if (pendingRecovery[b] == true) sendSyncRequest(userId, myId, b) }
+            }
+        }
+    }
+
+    private suspend fun sendSyncRequest(userId: String, myId: String, target: String) {
+        val app = context.applicationContext as MyMesagApp
+        val since = app.receivedNotifyStore.watermark(target)
+        val req = SyncRequestEvent(
+            id = UUID.randomUUID().toString(),
+            from = myId,
+            to = target,
+            ts = System.currentTimeMillis(),
+            sinceTs = since
+        )
+        val plain = json.encodeToString(SyncRequestEvent.serializer(), req)
+        val env = CryptoManager.encrypt(plain, myId, target) ?: return
+        manager.publish(MqttTopics.syncReq(userId, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        Log.d(TAG, "sync request sent to=$target sinceTs=$since")
+    }
+
+    private suspend fun handleSyncDone(payload: String) {
+        val envelope = runCatching {
+            json.decodeFromString(EncryptedEnvelope.serializer(), payload)
+        }.getOrNull() ?: return
+        val plaintext = CryptoManager.decrypt(envelope) ?: return
+        // syncreq 通道双向：A 只处理完成信号；请求缺少 replayed/upToTs，解码为 done 会失败而被忽略
+        val done = runCatching {
+            json.decodeFromString(SyncDoneEvent.serializer(), plaintext)
+        }.getOrNull() ?: return
+        if (done.type != "syncdone") return
+        val myId = deviceIdentity.deviceId()
+        if (done.to != myId) return
+        pendingRecovery[done.from] = false
+        val app = context.applicationContext as MyMesagApp
+        app.receivedNotifyStore.advanceWatermark(done.from, done.upToTs)
+        Log.d(TAG, "sync done from=${done.from} replayed=${done.replayed} upToTs=${done.upToTs}")
+    }
+
     companion object {
         /** 本应用重建通知使用的 tag，用作防回环标记（不变量 2）。 */
         const val SYNCED_TAG = "mymesag_synced"
         const val CHANNEL_ID = "synced_notifications"
         private const val TAG = "NotifReceiver"
         private const val MAX_LINES = 10
+        private const val RETRY_INTERVAL_MS = 60_000L
+        private const val MAX_RETRY = 5
     }
 }
