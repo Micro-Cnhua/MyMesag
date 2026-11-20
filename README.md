@@ -55,7 +55,7 @@ MyMesag/
 ```bash
 # 克隆项目
 git clone https://github.com/Micro-Cnhua/MyMesag.git
-cd MyMesag/Develop
+cd MyMesag
 
 # 编译 Release APK
 ./gradlew assembleRelease
