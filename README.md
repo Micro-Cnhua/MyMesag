@@ -9,14 +9,15 @@
 -   **多设备支持** - 支持多台设备配对，两两独立会话密钥
 -   **应用过滤** - 自由选择需要同步的应用
 -   **验证码同步** - 可选同步验证码短信（需确认风险）
+
 ## 技术栈
 
-- **语言**: Kotlin
-- **UI**: Jetpack Compose + Material 3
-- **网络**: Eclipse Paho MQTT (TCP/SSL)
-- **加密**: Google Tink (AES-256-GCM) + X25519
-- **存储**: Room Database + DataStore + Android Keystore
-- **架构**: MVVM + Clean Architecture (多模块)
+-   **语言**: Kotlin
+-   **UI**: Jetpack Compose + Material 3
+-   **网络**: Eclipse Paho MQTT (TCP/SSL)
+-   **加密**: Google Tink (AES-256-GCM) + X25519
+-   **存储**: Room Database + DataStore + Android Keystore
+-   **架构**: MVVM + Clean Architecture (多模块)
 
 ## 项目结构
 
@@ -45,15 +46,15 @@ MyMesag/
 
 ### 环境要求
 
-- JDK 17+
-- Android SDK 35
-- Gradle 8.12+
+-   JDK 17+
+-   Android SDK 35
+-   Gradle 8.12+
 
 ### 编译步骤
 
 ```bash
 # 克隆项目
-git clone https://github.com/你的用户名/MyMesag.git
+git clone https://github.com/Micro-Cnhua/MyMesag.git
 cd MyMesag/Develop
 
 # 编译 Release APK
@@ -82,11 +83,11 @@ signingConfigs {
 
 ### 首次使用
 
-1. **开启通知使用权** - 安装后授予通知监听权限
-2. **配置 MQTT 服务器** - 设置 MQTT 连接（支持 TCP/SSL）
-3. **设备配对** - 两台设备通过扫描二维码配对
-4. **选择同步应用** - 在「应用选择」开启需要同步的应用
-5. **开始同步** - 通知会自动同步到配对设备
+1.  **开启通知使用权** - 安装后授予通知监听权限
+2.  **配置 MQTT 服务器** - 设置 MQTT 连接（支持 TCP/SSL）
+3.  **设备配对** - 两台设备通过扫描二维码配对
+4.  **选择同步应用** - 在「应用选择」开启需要同步的应用
+5.  **开始同步** - 通知会自动同步到配对设备
 
 ### 详细文档
 
@@ -96,17 +97,17 @@ signingConfigs {
 
 ### 加密机制
 
-- **传输加密**: MQTT 支持 SSL/TLS（推荐）
-- **端到端加密**: 通知内容使用 AES-256-GCM 加密
-- **密钥交换**: X25519 ECDH 密钥协商
-- **密钥存储**: Android Keystore 硬件级保护
-- **抗重放**: 消息序号 + 时间戳校验
+-   **传输加密**: MQTT 支持 SSL/TLS（推荐）
+-   **端到端加密**: 通知内容使用 AES-256-GCM 加密
+-   **密钥交换**: X25519 ECDH 密钥协商
+-   **密钥存储**: Android Keystore 硬件级保护
+-   **抗重放**: 消息序号 + 时间戳校验
 
 ### 注意事项
 
-- ⚠️ 验证码同步功能会通过网络传输验证码，请确保 MQTT 服务器可信
-- ⚠️ 不要将签名密钥（.jks 文件）上传到公开仓库
-- ⚠️ 建议使用自建 MQTT 服务器，避免使用公共服务器
+-   ⚠️ 验证码同步功能会通过网络传输验证码，请确保 MQTT 服务器可信
+-   ⚠️ 不要将签名密钥（.jks 文件）上传到公开仓库
+-   ⚠️ 建议使用自建 MQTT 服务器，避免使用公共服务器
 
 ## MQTT 服务器配置
 
@@ -123,24 +124,24 @@ docker run -d --name mosquitto \
 ```
 
 #### 使用 EMQX
-详见docs目录中的MQTT-Broker-Docker-Compose.md文档：
-[点击查看](docs/MQTT-Broker-Docker-Compose.md)
+
+详见docs目录中的MQTT-Broker-Docker-Compose.md文档： [点击查看](docs/MQTT-Broker-Docker-Compose.md)
 
 ### 公用服务器（不推荐，有安全风险，仅建议测试）
 
-- tcp://broker.emqx.io:1883
-- ssl://broker.emqx.io:8883
+-   tcp://broker.emqx.io:1883
+-   ssl://broker.emqx.io:8883
 
 ### 连接格式
 
-- **TCP**: `tcp://192.168.1.100:1883`（内网）
-- **SSL**: `ssl://your-domain.com:8883`（外网，推荐）
+-   **TCP**: `tcp://192.168.1.100:1883`（内网）
+-   **SSL**: `ssl://your-domain.com:8883`（外网，推荐）
 
 ## 系统要求
 
-- Android 8.0 (API 26) 及以上
-- 需要通知使用权权限
-- 可选权限：电话、短信、联系人（用于未接来电回复）
+-   Android 8.0 (API 26) 及以上
+-   需要通知使用权权限
+-   可选权限：电话、短信、联系人（用于未接来电回复）
 
 ## 贡献
 
@@ -152,10 +153,10 @@ docker run -d --name mosquitto \
 
 ## 致谢
 
-- [Eclipse Paho](https://www.eclipse.org/paho/) - MQTT 客户端
-- [Google Tink](https://github.com/google/tink) - 加密库
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) - 现代 UI 工具包
+-   [Eclipse Paho](https://www.eclipse.org/paho/) - MQTT 客户端
+-   [Google Tink](https://github.com/google/tink) - 加密库
+-   [Jetpack Compose](https://developer.android.com/jetpack/compose) - 现代 UI 工具包
 
----
+* * *
 
 **免责声明**: 本工具仅供学习和研究使用。使用端到端加密通信时，请确保遵守当地法律法规。
