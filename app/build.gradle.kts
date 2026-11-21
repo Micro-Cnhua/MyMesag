@@ -8,7 +8,7 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// 从 local.properties 读取签名配置（不上传到 Git）
+// 从 local.properties 读取签名配置
 val keystorePropertiesFile = rootProject.file("local.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {

@@ -13,7 +13,7 @@ gradle-app.setting
 !gradle-wrapper.jar
 captures/
 
-# 全局缓存（位于仓库上层目录，仅作记录；实际由群晖同步规则排除）
+# 全局缓存（位于仓库上层目录，仅作记录）
 .gradle-home/
 .android-home/
 
@@ -28,7 +28,7 @@ captures/
 # 本地配置（包含 SDK 路径等）
 local.properties
 
-# 签名密钥（重要！不要上传）
+# 签名密钥
 *.jks
 *.keystore
 *.p12
@@ -58,7 +58,6 @@ gen_v12.py
 gen_icon.py
 checks-v12.json
 
-# Synology 同步临时文件
 @SynoEAStream
 @tmp
 *.syno
