@@ -8,6 +8,7 @@ import com.mymesag.MyMesagApp
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.MqttConnection
 import com.mymesag.model.EncryptedEnvelope
+import com.mymesag.model.MarkReadEvent
 import com.mymesag.model.ReplyEvent
 import com.mymesag.model.ReplyResult
 import com.mymesag.network.MqttTopics
@@ -111,9 +112,56 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 远程标记已读：发 MarkReadEvent 给 A 端触发源应用已读动作，复用同一套 ack 匹配/超时状态机。 */
+    fun markRead(replyToId: String, pkg: String, targetDeviceId: String) {
+        if (_state.value is ReplyUiState.Sending) return
+        viewModelScope.launch {
+            if (!MqttConnection.manager.isConnected) {
+                _state.value = ReplyUiState.Failed("NOT_CONNECTED", "本机未连接 MQTT 服务器，无法标记已读")
+                return@launch
+            }
+            val userId = app.deviceIdentity.userId()
+            val deviceId = app.deviceIdentity.deviceId()
+            val markReadId = UUID.randomUUID().toString()
+            val event = MarkReadEvent(
+                id = markReadId,
+                from = deviceId,
+                to = targetDeviceId,
+                ts = System.currentTimeMillis(),
+                replyToId = replyToId,
+                pkg = pkg
+            )
+            val plaintext = json.encodeToString(MarkReadEvent.serializer(), event)
+            val envelope = CryptoManager.encrypt(plaintext, deviceId, targetDeviceId)
+            if (envelope == null) {
+                Log.w(TAG, "no session key for $targetDeviceId, cannot encrypt markread")
+                _state.value = ReplyUiState.Failed("NO_KEY", "本机缺少与对方的会话密钥，请重新配对后再试")
+                return@launch
+            }
+            pendingReplyId = markReadId
+            pendingReplyToId = replyToId
+            pendingTarget = targetDeviceId
+            _state.value = ReplyUiState.Sending
+            val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
+            MqttConnection.manager.publish(MqttTopics.markRead(userId, targetDeviceId), payload)
+            timeoutJob?.cancel()
+            timeoutJob = viewModelScope.launch {
+                delay(ACK_TIMEOUT_MS)
+                if (pendingReplyId == markReadId) {
+                    pendingReplyId = null
+                    _state.value = ReplyUiState.Failed(
+                        ReplyResult.OFFLINE_TIMEOUT,
+                        "未收到对方回执，对方可能离线或未连接"
+                    )
+                }
+            }
+        }
+    }
+
     private fun reasonText(reason: String): String = when (reason) {
         ReplyResult.NOT_FOUND -> "对方未找到该通知的回复入口（通知可能已被清除或过期）"
         ReplyResult.NO_REPLY_ACTION -> "对方应用没有可用的回复动作，或系统拒绝了回复调用"
+        ReplyResult.NO_READ_ACTION -> "对方应用没有可用的「标记已读」动作，或通知已失效"
         ReplyResult.OFFLINE_TIMEOUT -> "未收到对方回执，对方可能离线"
         ReplyResult.DECRYPT_FAILED -> "对方解密失败，密钥可能不一致，请重新配对"
         ReplyResult.SEQ_REPLAY -> "对方判定为重放消息，已拒绝"

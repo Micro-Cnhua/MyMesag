@@ -50,6 +50,7 @@ fun ReplyScreen(
     targetDeviceId: String,
     appName: String,
     originalContent: String,
+    markReadMode: Boolean = false,
     onDone: () -> Unit,
     viewModel: ReplyViewModel = viewModel()
 ) {
@@ -59,7 +60,8 @@ fun ReplyScreen(
 
     LaunchedEffect(state) {
         if (state is ReplyUiState.Success) {
-            Toast.makeText(context.applicationContext, "远程回复成功", Toast.LENGTH_SHORT).show()
+            val msg = if (markReadMode) "已标记已读" else "远程回复成功"
+            Toast.makeText(context.applicationContext, msg, Toast.LENGTH_SHORT).show()
             onDone()
         }
     }
@@ -67,7 +69,7 @@ fun ReplyScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("回复 $appName") },
+                title = { Text(if (markReadMode) "标记已读 $appName" else "回复 $appName") },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -99,7 +101,7 @@ fun ReplyScreen(
                     Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(appName, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "消息将通过本机发送",
+                            if (markReadMode) "将远程标记对方消息为已读" else "消息将通过本机发送",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -172,21 +174,22 @@ fun ReplyScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("回复内容", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        placeholder = { Text("输入回复内容") },
-                        minLines = 3,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            if (!markReadMode) {
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("回复内容", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            placeholder = { Text("输入回复内容") },
+                            minLines = 3,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
+                Spacer(Modifier.height(20.dp))
             }
-
-            Spacer(Modifier.height(20.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -196,13 +199,23 @@ fun ReplyScreen(
                     onClick = onDone,
                     modifier = Modifier.weight(1f)
                 ) { Text("取消") }
-                Button(
-                    onClick = { viewModel.send(replyToId, pkg, targetDeviceId, text) },
-                    enabled = text.isNotBlank() && state !is ReplyUiState.Sending,
-                    modifier = Modifier.weight(2f)
-                ) {
-                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(if (state is ReplyUiState.Sending) "  发送中…" else "  发送")
+                if (markReadMode) {
+                    Button(
+                        onClick = { viewModel.markRead(replyToId, pkg, targetDeviceId) },
+                        enabled = state !is ReplyUiState.Sending,
+                        modifier = Modifier.weight(2f)
+                    ) {
+                        Text(if (state is ReplyUiState.Sending) "标记中…" else "标记已读")
+                    }
+                } else {
+                    Button(
+                        onClick = { viewModel.send(replyToId, pkg, targetDeviceId, text) },
+                        enabled = text.isNotBlank() && state !is ReplyUiState.Sending,
+                        modifier = Modifier.weight(2f)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Text(if (state is ReplyUiState.Sending) "  发送中…" else "  发送")
+                    }
                 }
             }
 

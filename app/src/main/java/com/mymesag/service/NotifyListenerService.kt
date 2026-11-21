@@ -1,5 +1,6 @@
 package com.mymesag.service
 
+import android.app.Notification
 import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -171,11 +172,14 @@ class NotifyListenerService : NotificationListenerService() {
                 val replyAction = sbn.notification.actions
                     ?.firstOrNull { it.remoteInputs?.isNotEmpty() == true }
                 val canReply = replyAction != null && ReplyConstants.isSupported(pkg)
+                // 远程标记已读（短信优先）：readAction 已随回复动作缓存且为短信类时，B 端才显示按钮
+                var canMarkRead = false
                 if (replyAction != null && canReply) {
                     // 同通知里「回复」旁边的「标记为已读」快捷动作（回复成功后自动触发）
                     val readAction = sbn.notification.actions
                         ?.firstOrNull { it !== replyAction && ReplyConstants.isMarkReadTitle(it.title?.toString()) }
                     app.replyActionCache.put(stableKey, replyAction, readAction)
+                    canMarkRead = readAction != null && ReplyConstants.isSms(pkg)
                 }
 
                 val event = NotificationEvent(
@@ -192,6 +196,8 @@ class NotifyListenerService : NotificationListenerService() {
                     contact = contact,
                     priority = sbn.notification.priority,
                     canReply = canReply,
+                    canMarkRead = canMarkRead,
+                    isCall = sbn.notification.category == Notification.CATEGORY_CALL,
                     deviceTag = deviceTag
                 )
 
@@ -277,10 +283,12 @@ class NotifyListenerService : NotificationListenerService() {
             val replyAction = sbn.notification.actions
                 ?.firstOrNull { it.remoteInputs?.isNotEmpty() == true }
             val canReply = replyAction != null && ReplyConstants.isSupported(pkg)
+            var canMarkRead = false
             if (replyAction != null && canReply) {
                 val readAction = sbn.notification.actions
                     ?.firstOrNull { it !== replyAction && ReplyConstants.isMarkReadTitle(it.title?.toString()) }
                 app.replyActionCache.put(stableKey, replyAction, readAction)
+                canMarkRead = readAction != null && ReplyConstants.isSms(pkg)
             }
 
             val event = NotificationEvent(
@@ -297,6 +305,8 @@ class NotifyListenerService : NotificationListenerService() {
                 contact = contact,
                 priority = sbn.notification.priority,
                 canReply = canReply,
+                canMarkRead = canMarkRead,
+                isCall = sbn.notification.category == Notification.CATEGORY_CALL,
                 deviceTag = app.mqttConfigStore.savedDeviceTag() ?: ""
             )
             publishEvent(event)

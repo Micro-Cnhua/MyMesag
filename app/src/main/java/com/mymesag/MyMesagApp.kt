@@ -28,6 +28,7 @@ import com.mymesag.pairing.PairingManager
 import com.mymesag.reply.ReplyActionCache
 import com.mymesag.reply.ReplyAckReceiver
 import com.mymesag.reply.ReplyHandler
+import com.mymesag.reply.MarkReadHandler
 import com.mymesag.service.CallListener
 import com.mymesag.service.MqttForegroundService
 import kotlinx.coroutines.CompletableDeferred
@@ -72,6 +73,10 @@ class MyMesagApp : Application() {
 
     val replyAckReceiver: ReplyAckReceiver by lazy { ReplyAckReceiver(MqttConnection.manager, deviceIdentity) }
 
+    val markReadHandler: MarkReadHandler by lazy {
+        MarkReadHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache)
+    }
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // 会话密钥加载完成标志（避免消息到达时密钥未加载）
@@ -108,6 +113,8 @@ class MyMesagApp : Application() {
         ReplyHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache).start()
         // B 端回执接收：订阅 ack/{userId}/+，把真实原因码交给回复界面
         replyAckReceiver.start()
+        // A 端远程标记已读：订阅 markread/{userId}/+，触发源应用「标记已读」动作并回 ack
+        markReadHandler.start()
         // B 端来电显示：订阅 call/{userId}/+
         CallReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端来电监听：监听通话状态并发布 CallEvent

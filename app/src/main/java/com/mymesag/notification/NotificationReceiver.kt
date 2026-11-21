@@ -9,7 +9,6 @@ import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.mymesag.MainActivity
 import com.mymesag.MyMesagApp
 import com.mymesag.R
 import com.mymesag.data.CryptoManager
@@ -200,9 +199,12 @@ class NotificationReceiver(
             // 单条消息：BigTextStyle 完整展示，避免长内容被截断/被回复按钮折叠
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines.last()))
         }
+        val original = if (contact.isNotBlank()) "$contact：$line" else line
         if (event.canReply && ReplyConstants.isSupported(event.pkg)) {
-            val original = if (contact.isNotBlank()) "$contact：$line" else line
             builder.addAction(buildReplyAction(event, original))
+        }
+        if (event.canMarkRead) {
+            builder.addAction(buildMarkReadAction(event, original))
         }
         val notification = builder.build()
         try {
@@ -289,9 +291,11 @@ class NotificationReceiver(
 
     private fun buildContentIntent(event: NotificationEvent): PendingIntent {
         val requestCode = event.stableKey.hashCode()
-        // 通话类通知点击时打开 MyMesag，而不是跳到本机拨号器（避免误记录通话）
-        val intent = if (isCallApp(event.pkg)) {
-            Intent(context, MainActivity::class.java)
+        // 通话类通知点击时跳回本机拨号器，并尽量把通知里的号码预填进去（ACTION_DIAL，只预填不直接拨出）。
+        // 主判据：源通知类别 CATEGORY_CALL（随事件下发，覆盖所有厂商）；包名列表兜底（类别未设置时）。
+        val intent = if (event.isCall || isCallApp(event.pkg)) {
+            val number = extractPhoneNumber(event)
+            Intent(Intent.ACTION_DIAL, number?.let { Uri.parse("tel:$it") })
         } else {
             (context.packageManager.getLaunchIntentForPackage(event.pkg)
                 ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${event.pkg}")))
@@ -302,11 +306,18 @@ class NotificationReceiver(
         )
     }
 
-    private fun isCallApp(pkg: String): Boolean =
-        pkg == "com.android.incallui" || pkg == "com.android.dialer" ||
-            pkg == "com.android.phone" || pkg == "com.android.server.telecom" ||
-            pkg == "com.huawei.contacts" || pkg == "com.hihonor.contacts" ||
-            pkg == "com.hihonor.incallui"
+    private fun isCallApp(pkg: String): Boolean = pkg in CALL_APP_PACKAGES
+
+    /** 从通知的联系人/标题/正文里尽力提取电话号码（用于预填拨号器）；提不到返回 null。 */
+    private fun extractPhoneNumber(event: NotificationEvent): String? {
+        val regex = Regex("\\+?\\d[\\d\\s()\\-]{5,}\\d")
+        for (s in listOf(event.contact, event.title, event.text)) {
+            if (s.isBlank()) continue
+            val candidate = regex.find(s)?.value?.filter { it.isDigit() || it == '+' } ?: continue
+            if (candidate.count { it.isDigit() } >= 6) return candidate
+        }
+        return null
+    }
 
     private fun buildReplyAction(event: NotificationEvent, original: String): NotificationCompat.Action {
         val intent = Intent(context, ReplyActivity::class.java).apply {
@@ -322,6 +333,23 @@ class NotificationReceiver(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "回复", pi).build()
+    }
+
+    private fun buildMarkReadAction(event: NotificationEvent, original: String): NotificationCompat.Action {
+        val intent = Intent(context, ReplyActivity::class.java).apply {
+            putExtra(ReplyActivity.EXTRA_REPLY_TO, event.stableKey)
+            putExtra(ReplyActivity.EXTRA_PKG, event.pkg)
+            putExtra(ReplyActivity.EXTRA_TARGET, event.from)
+            putExtra(ReplyActivity.EXTRA_APP_NAME, event.appName)
+            putExtra(ReplyActivity.EXTRA_ORIGINAL, original)
+            putExtra(ReplyActivity.EXTRA_MARK_READ, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pi = PendingIntent.getActivity(
+            context, event.stableKey.hashCode() * 31 + 1, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "标记已读", pi).build()
     }
 
     private fun ensureChannel() {
@@ -408,5 +436,19 @@ class NotificationReceiver(
         private const val MAX_LINES = 10
         private const val RETRY_INTERVAL_MS = 60_000L
         private const val MAX_RETRY = 5
+
+        /** 来电/拨号/联系人类应用：点击其同步通知时打开 MyMesag，避免跳本机拨号器误记录通话。 */
+        private val CALL_APP_PACKAGES = setOf(
+            // AOSP / 小米 / OPPO / vivo
+            "com.android.incallui", "com.android.dialer", "com.android.phone",
+            "com.android.server.telecom", "com.android.contacts",
+            // 谷歌（Pixel 及海外多数机型的 Google Dialer）
+            "com.google.android.dialer", "com.google.android.contacts",
+            // 三星 OneUI
+            "com.samsung.android.dialer", "com.samsung.android.incallui",
+            "com.samsung.android.app.telephoneui", "com.samsung.android.contacts",
+            // 华为 / 荣耀（拨号集成在联系人）
+            "com.huawei.contacts", "com.hihonor.contacts", "com.hihonor.incallui"
+        )
     }
 }

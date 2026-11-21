@@ -17,6 +17,7 @@ class ReplyActivity : ComponentActivity() {
         val target = intent.getStringExtra(EXTRA_TARGET).orEmpty()
         val appName = intent.getStringExtra(EXTRA_APP_NAME).orEmpty()
         val original = intent.getStringExtra(EXTRA_ORIGINAL).orEmpty()
+        val markRead = intent.getBooleanExtra(EXTRA_MARK_READ, false)
         if (replyToId.isNullOrEmpty()) {
             finish()
             return
@@ -24,7 +25,7 @@ class ReplyActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    ReplyScreen(replyToId, pkg, target, appName, original, onDone = { finish() })
+                    ReplyScreen(replyToId, pkg, target, appName, original, markReadMode = markRead, onDone = { finish() })
                 }
             }
         }
@@ -36,5 +37,6 @@ class ReplyActivity : ComponentActivity() {
         const val EXTRA_TARGET = "extra_target"
         const val EXTRA_APP_NAME = "extra_app_name"
         const val EXTRA_ORIGINAL = "extra_original"
+        const val EXTRA_MARK_READ = "extra_mark_read"
     }
 }

@@ -12,6 +12,9 @@ object MqttTopics {
     fun reply(userId: String, deviceId: String) = "reply/$userId/$deviceId"
     fun replyWildcard(userId: String) = "reply/$userId/+"
 
+    fun markRead(userId: String, deviceId: String) = "markread/$userId/$deviceId"
+    fun markReadWildcard(userId: String) = "markread/$userId/+"
+
     fun ack(userId: String, deviceId: String) = "ack/$userId/$deviceId"
     fun ackWildcard(userId: String) = "ack/$userId/+"
 

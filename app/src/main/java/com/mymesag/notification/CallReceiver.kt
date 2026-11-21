@@ -2,7 +2,10 @@ package com.mymesag.notification
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mymesag.R
@@ -78,6 +81,7 @@ class CallReceiver(
             .setContentTitle("来电")
             .setContentText(content)
             .setAutoCancel(true)
+            .setContentIntent(buildDialIntent(event))
             .build()
         try {
             nm.notify(CALL_TAG, event.id.hashCode(), notification)
@@ -85,6 +89,16 @@ class CallReceiver(
         } catch (e: SecurityException) {
             Log.w(TAG, "notification denied", e)
         }
+    }
+
+    /** 点击来电通知跳回本机拨号器，号码可用时预填（ACTION_DIAL，只预填不直接拨出）。 */
+    private fun buildDialIntent(event: CallEvent): PendingIntent {
+        val uri = event.number?.takeIf { it.isNotBlank() }?.let { Uri.parse("tel:$it") }
+        val intent = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(
+            context, event.id.hashCode(), intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
     }
 
     private fun ensureChannel() {
