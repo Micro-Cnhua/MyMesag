@@ -168,8 +168,8 @@ class MqttManager(private val scope: CoroutineScope) {
         try {
             c.subscribe(topic, qos, null, subscribeListener)
         } catch (e: MqttException) {
+            // 操作失败不改连接状态：连接死活由 connectionLost 驱动，避免把瞬时失败误报成 ERROR
             Log.e(TAG, "subscribe exception: ${e.message}", e)
-            _state.value = MqttState.ERROR
         }
     }
 
@@ -199,7 +199,6 @@ class MqttManager(private val scope: CoroutineScope) {
             c.publish(topic, message, null, publishListener)
         } catch (e: MqttException) {
             Log.e(TAG, "publish exception: ${e.message}", e)
-            _state.value = MqttState.ERROR
         }
     }
 
@@ -324,7 +323,6 @@ class MqttManager(private val scope: CoroutineScope) {
 
         override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
             Log.w(TAG, "subscribe onFailure: ${exception?.message}")
-            _state.value = MqttState.ERROR
         }
     }
 
@@ -333,7 +331,6 @@ class MqttManager(private val scope: CoroutineScope) {
 
         override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
             Log.w(TAG, "publish onFailure: ${exception?.message}")
-            _state.value = MqttState.ERROR
         }
     }
 

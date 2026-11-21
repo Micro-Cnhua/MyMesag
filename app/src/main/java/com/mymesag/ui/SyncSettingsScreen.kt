@@ -363,7 +363,7 @@ private fun SystemSettingsSection(
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(120, 300, 600, 900).forEach { seconds ->
+                    listOf(60, 120, 300, 600).forEach { seconds ->
                         FilterChip(
                             selected = keepAlive == seconds,
                             onClick = {

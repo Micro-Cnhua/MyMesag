@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
  * 阶段 6 会将其迁移到 MqttForegroundService。
  */
 object MqttConnection {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // 用 IO 而非主线程：MqttManager 内含阻塞调用（disconnect 等待、SSLContext 构建），跑主线程会卡顿甚至 ANR
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val manager = MqttManager(scope)
 }
