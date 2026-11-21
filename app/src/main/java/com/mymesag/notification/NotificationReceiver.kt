@@ -9,20 +9,24 @@ import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 import com.mymesag.MyMesagApp
 import com.mymesag.R
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
 import com.mymesag.data.followUserIdSubscription
+import com.mymesag.model.AckEvent
 import com.mymesag.model.EncryptedEnvelope
+import com.mymesag.model.MarkReadEvent
 import com.mymesag.model.NotificationEvent
+import com.mymesag.model.ReplyEvent
+import com.mymesag.model.ReplyResult
 import com.mymesag.model.SyncDoneEvent
 import com.mymesag.model.SyncRequestEvent
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttState
 import com.mymesag.network.MqttTopics
 import com.mymesag.reply.ReplyConstants
-import com.mymesag.ui.ReplyActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,6 +55,9 @@ class NotificationReceiver(
 
     // 按应用分组的消息累积（简单版：同一应用折叠成一条，展开看多条）
     private val groups = mutableMapOf<String, MutableList<String>>()
+
+    // 内联回复待回执：replyId → 通知 id + 原事件，用于把 A 端 ack 反映到通知状态
+    private val pendingInlineReplies = ConcurrentHashMap<String, PendingReply>()
 
     // 断线补全：每个发送端 B 是否仍待补全；收到其 SyncDone 即置 false 停止重试
     private val pendingRecovery = ConcurrentHashMap<String, Boolean>()
@@ -85,6 +92,21 @@ class NotificationReceiver(
                     pendingRecovery.clear()
                 }
                 prevConnected = connected
+            }
+        }
+        // 内联回复回执：把 A 端 ack 反映到通知状态（成功延时撤下、失败保留内联回复以便重试）
+        scope.launch {
+            val app = context.applicationContext as MyMesagApp
+            val myId = deviceIdentity.deviceId()
+            app.replyAckReceiver.acks.collect { ack ->
+                if (ack.to != myId) return@collect
+                val p = takePending(ack) ?: return@collect
+                if (ack.reason == ReplyResult.OK) {
+                    postReplyStatus(p.event, p.notifId, p.original, "✓ 回复成功", allowReply = false)
+                    scope.launch { delay(3000); dismissNotification(p.notifId, p.event) }
+                } else {
+                    postReplyStatus(p.event, p.notifId, p.original, "✗ ${reasonText(ack.reason)}", allowReply = true)
+                }
             }
         }
     }
@@ -126,14 +148,14 @@ class NotificationReceiver(
             groups.remove(key)
             val nm = context.getSystemService(NotificationManager::class.java)
             nm.cancel(SYNCED_TAG, key.hashCode())
-            
+
             // 更新分组摘要
             updateGroupSummary(nm, event, parsed)
-            
+
             // 更新应用角标
             val totalNotifications = groups.values.sumOf { it.size }
             NotificationBadgeHelper.setBadge(context, totalNotifications)
-            
+
             Log.d(TAG, "removed group key=$key title=${event.title} text=${event.text} badge=$totalNotifications")
             return
         }
@@ -200,24 +222,25 @@ class NotificationReceiver(
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines.last()))
         }
         val original = if (contact.isNotBlank()) "$contact：$line" else line
+        val notifId = key.hashCode()
         if (event.canReply && ReplyConstants.isSupported(event.pkg)) {
-            builder.addAction(buildReplyAction(event, original))
+            builder.addAction(buildReplyAction(event, original, notifId))
         }
         if (event.canMarkRead) {
-            builder.addAction(buildMarkReadAction(event, original))
+            builder.addAction(buildMarkReadAction(event, notifId))
         }
         val notification = builder.build()
         try {
             // 同一应用+联系人用同一 id，实现折叠覆盖
-            nm.notify(SYNCED_TAG, key.hashCode(), notification)
-            
+            nm.notify(SYNCED_TAG, notifId, notification)
+
             // 创建或更新分组摘要通知
             updateGroupSummary(nm, event, parsed)
-            
+
             // 更新应用角标
             val totalNotifications = groups.values.sumOf { it.size }
             NotificationBadgeHelper.setBadge(context, totalNotifications)
-            
+
             Log.d(TAG, "rebuilt pkg=${event.pkg} contact=$contact lines=${lines.size} group=${parsed.isGroup} badge=$totalNotifications")
         } catch (e: SecurityException) {
             Log.w(TAG, "POST_NOTIFICATIONS not granted", e)
@@ -230,22 +253,22 @@ class NotificationReceiver(
         parsed: NotificationParser.ParsedNotification
     ) {
         val groupKey = "mymesag_${event.pkg}"
-        
+
         // 统计该分组下的通知数量
         val groupNotificationCount = groups.entries
             .count { it.key.startsWith("${event.pkg}|") }
-        
+
         if (groupNotificationCount <= 1) {
             // 只有一个通知，不需要摘要
             nm.cancel(SYNCED_TAG, groupKey.hashCode())
             return
         }
-        
+
         // 创建摘要通知
         val inboxStyle = NotificationCompat.InboxStyle()
             .setBigContentTitle("${event.appName} · ${groupNotificationCount}个对话")
             .setSummaryText("共${groups.values.sumOf { it.size }}条新消息")
-        
+
         // 显示每个联系人的最新消息
         groups.entries
             .filter { it.key.startsWith("${event.pkg}|") }
@@ -256,7 +279,7 @@ class NotificationReceiver(
                     inboxStyle.addLine("$contactName: ${messages.last().take(30)}")
                 }
             }
-        
+
         val summaryBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setContentTitle(event.appName)
@@ -265,7 +288,7 @@ class NotificationReceiver(
             .setGroupSummary(true)
             .setAutoCancel(true)
             .setStyle(inboxStyle)
-        
+
         try {
             nm.notify(SYNCED_TAG, groupKey.hashCode(), summaryBuilder.build())
         } catch (e: SecurityException) {
@@ -319,38 +342,199 @@ class NotificationReceiver(
         return null
     }
 
-    private fun buildReplyAction(event: NotificationEvent, original: String): NotificationCompat.Action {
-        val intent = Intent(context, ReplyActivity::class.java).apply {
-            putExtra(ReplyActivity.EXTRA_REPLY_TO, event.stableKey)
-            putExtra(ReplyActivity.EXTRA_PKG, event.pkg)
-            putExtra(ReplyActivity.EXTRA_TARGET, event.from)
-            putExtra(ReplyActivity.EXTRA_APP_NAME, event.appName)
-            putExtra(ReplyActivity.EXTRA_ORIGINAL, original)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun buildReplyAction(event: NotificationEvent, original: String, notifId: Int): NotificationCompat.Action {
+        val remoteInput = RemoteInput.Builder(KEY_REPLY_TEXT).setLabel("输入回复内容").build()
+        val intent = Intent(context, InlineReplyReceiver::class.java).apply {
+            putExtra(EXTRA_REPLY_TO, event.stableKey)
+            putExtra(EXTRA_PKG, event.pkg)
+            putExtra(EXTRA_TARGET, event.from)
+            putExtra(EXTRA_NOTIF_ID, notifId)
+            putExtra(EXTRA_ORIGINAL, original)
+            putExtra(EXTRA_EVENT, json.encodeToString(NotificationEvent.serializer(), event))
         }
-        val pi = PendingIntent.getActivity(
+        // RemoteInput 必须用可变 PendingIntent，系统才能把输入框结果回填进 intent
+        val pi = PendingIntent.getBroadcast(
             context, event.stableKey.hashCode() * 31, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "回复", pi).build()
+        return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "回复", pi)
+            .addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(true)
+            .build()
     }
 
-    private fun buildMarkReadAction(event: NotificationEvent, original: String): NotificationCompat.Action {
-        val intent = Intent(context, ReplyActivity::class.java).apply {
-            putExtra(ReplyActivity.EXTRA_REPLY_TO, event.stableKey)
-            putExtra(ReplyActivity.EXTRA_PKG, event.pkg)
-            putExtra(ReplyActivity.EXTRA_TARGET, event.from)
-            putExtra(ReplyActivity.EXTRA_APP_NAME, event.appName)
-            putExtra(ReplyActivity.EXTRA_ORIGINAL, original)
-            putExtra(ReplyActivity.EXTRA_MARK_READ, true)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun buildMarkReadAction(event: NotificationEvent, notifId: Int): NotificationCompat.Action {
+        val intent = Intent(context, InlineMarkReadReceiver::class.java).apply {
+            putExtra(EXTRA_REPLY_TO, event.stableKey)
+            putExtra(EXTRA_PKG, event.pkg)
+            putExtra(EXTRA_TARGET, event.from)
+            putExtra(EXTRA_NOTIF_ID, notifId)
+            putExtra(EXTRA_EVENT, json.encodeToString(NotificationEvent.serializer(), event))
         }
-        val pi = PendingIntent.getActivity(
+        val pi = PendingIntent.getBroadcast(
             context, event.stableKey.hashCode() * 31 + 1, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Action.Builder(R.drawable.ic_stat_notify, "标记已读", pi).build()
     }
+
+    /** 通知内联回复入口（InlineReplyReceiver 调用）：直接在通知里输入并远程发送，不跳转应用。 */
+    fun onInlineReply(intent: Intent) {
+        scope.launch { handleInlineReply(intent) }
+    }
+
+    /** 通知内联标记已读入口（InlineMarkReadReceiver 调用）：直接远程标记已读后撤下通知。 */
+    fun onInlineMarkRead(intent: Intent) {
+        scope.launch { handleInlineMarkRead(intent) }
+    }
+
+    private suspend fun handleInlineReply(intent: Intent) {
+        val text = RemoteInput.getResultsFromIntent(intent)
+            ?.getCharSequence(KEY_REPLY_TEXT)?.toString()?.trim()
+        if (text.isNullOrEmpty()) return
+        val event = decodeEvent(intent) ?: return
+        val replyToId = intent.getStringExtra(EXTRA_REPLY_TO) ?: return
+        val pkg = intent.getStringExtra(EXTRA_PKG) ?: return
+        val target = intent.getStringExtra(EXTRA_TARGET) ?: return
+        val notifId = intent.getIntExtra(EXTRA_NOTIF_ID, event.stableKey.hashCode())
+        val original = intent.getStringExtra(EXTRA_ORIGINAL) ?: ""
+
+        if (!manager.isConnected) {
+            postReplyStatus(event, notifId, original, "✗ 本机未连接 MQTT，无法回复", allowReply = true)
+            return
+        }
+        val userId = deviceIdentity.userId()
+        val myId = deviceIdentity.deviceId()
+        val replyId = UUID.randomUUID().toString()
+        val ev = ReplyEvent(
+            id = replyId, from = myId, to = target,
+            ts = System.currentTimeMillis(), seq = System.currentTimeMillis(),
+            replyToId = replyToId, pkg = pkg, text = text
+        )
+        val env = CryptoManager.encrypt(json.encodeToString(ReplyEvent.serializer(), ev), myId, target)
+        if (env == null) {
+            postReplyStatus(event, notifId, original, "✗ 缺少会话密钥，请重新配对后再回复", allowReply = true)
+            return
+        }
+        pendingInlineReplies[replyId] = PendingReply(notifId, event, original)
+        postReplyStatus(event, notifId, original, "回复发送中，等待对方回执…", allowReply = false)
+        manager.publish(MqttTopics.reply(userId, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        scope.launch {
+            delay(ACK_TIMEOUT_MS)
+            val p = pendingInlineReplies.remove(replyId) ?: return@launch
+            postReplyStatus(p.event, p.notifId, p.original, "✗ 未收到对方回执，对方可能离线", allowReply = true)
+        }
+    }
+
+    private suspend fun handleInlineMarkRead(intent: Intent) {
+        val event = decodeEvent(intent) ?: return
+        val replyToId = intent.getStringExtra(EXTRA_REPLY_TO) ?: return
+        val pkg = intent.getStringExtra(EXTRA_PKG) ?: return
+        val target = intent.getStringExtra(EXTRA_TARGET) ?: return
+        val notifId = intent.getIntExtra(EXTRA_NOTIF_ID, event.stableKey.hashCode())
+        if (!manager.isConnected) {
+            toast("本机未连接 MQTT，无法标记已读")
+            return
+        }
+        val userId = deviceIdentity.userId()
+        val myId = deviceIdentity.deviceId()
+        val ev = MarkReadEvent(
+            id = UUID.randomUUID().toString(), from = myId, to = target,
+            ts = System.currentTimeMillis(), replyToId = replyToId, pkg = pkg
+        )
+        val env = CryptoManager.encrypt(json.encodeToString(MarkReadEvent.serializer(), ev), myId, target)
+        if (env == null) {
+            toast("缺少会话密钥，请重新配对后再试")
+            return
+        }
+        manager.publish(MqttTopics.markRead(userId, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        // 按需求：点击后直接撤下该通知，不再跳转应用二次确认
+        dismissNotification(notifId, event)
+        Log.d(TAG, "inline markread sent replyToId=$replyToId pkg=$pkg")
+    }
+
+    private fun decodeEvent(intent: Intent): NotificationEvent? {
+        val raw = intent.getStringExtra(EXTRA_EVENT) ?: return null
+        return runCatching { json.decodeFromString(NotificationEvent.serializer(), raw) }.getOrNull()
+    }
+
+    /** 回复后把通知刷新为状态视图（保留标题/图标/分组）；allowReply=true 时保留内联回复以便重试。 */
+    private suspend fun postReplyStatus(
+        event: NotificationEvent, notifId: Int, original: String, status: String, allowReply: Boolean
+    ) {
+        ensureChannel()
+        val nm = context.getSystemService(NotificationManager::class.java)
+        val parsed = NotificationParser.parse(event)
+        val contact = parsed.contact
+        val baseTitle = if (parsed.isGroup && parsed.groupName != null) {
+            "${parsed.groupName} · $contact"
+        } else if (contact.isNotBlank()) {
+            "${event.appName} · $contact"
+        } else {
+            event.appName
+        }
+        val titleText = deviceTagPrefix(event) + baseTitle
+        val largeIcon = NotificationIconFactory.sourceIcon(context, event.pkg)
+            ?: NotificationIconFactory.defaultIcon(context)
+        val body = if (original.isNotBlank()) "$original\n$status" else status
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_notify)
+            .setContentTitle(titleText)
+            .setContentText(status)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(buildContentIntent(event))
+            .setGroup("mymesag_${event.pkg}")
+            .setGroupSummary(false)
+        largeIcon?.let { builder.setLargeIcon(it) }
+        if (allowReply && event.canReply && ReplyConstants.isSupported(event.pkg)) {
+            builder.addAction(buildReplyAction(event, original, notifId))
+        }
+        if (event.canMarkRead) {
+            builder.addAction(buildMarkReadAction(event, notifId))
+        }
+        try {
+            nm.notify(SYNCED_TAG, notifId, builder.build())
+        } catch (e: SecurityException) {
+            Log.w(TAG, "post reply status denied", e)
+        }
+    }
+
+    private fun dismissNotification(notifId: Int, event: NotificationEvent) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.cancel(SYNCED_TAG, notifId)
+        val parsed = NotificationParser.parse(event)
+        groups.remove(groupKey(event, parsed))
+        updateGroupSummary(nm, event, parsed)
+        NotificationBadgeHelper.setBadge(context, groups.values.sumOf { it.size })
+    }
+
+    private fun takePending(ack: AckEvent): PendingReply? {
+        if (ack.replyId.isNotEmpty()) return pendingInlineReplies.remove(ack.replyId)
+        val key = pendingInlineReplies.entries.firstOrNull {
+            it.value.event.stableKey == ack.replyToId && it.value.event.from == ack.from
+        }?.key ?: return null
+        return pendingInlineReplies.remove(key)
+    }
+
+    private fun reasonText(reason: String): String = when (reason) {
+        ReplyResult.NOT_FOUND -> "对方未找到回复入口（通知可能已清除或过期）"
+        ReplyResult.NO_REPLY_ACTION -> "对方应用没有可用回复动作，或系统拒绝了回复"
+        ReplyResult.OFFLINE_TIMEOUT -> "未收到对方回执，对方可能离线"
+        ReplyResult.DECRYPT_FAILED -> "对方解密失败，密钥可能不一致，请重新配对"
+        ReplyResult.SEQ_REPLAY -> "对方判定为重放消息，已拒绝"
+        ReplyResult.NOT_PAIRED -> "双方未配对或配对已失效"
+        ReplyResult.UNSUPPORTED_VERSION -> "对方版本不支持该回复"
+        else -> "回复失败（$reason）"
+    }
+
+    private fun toast(msg: String) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private data class PendingReply(val notifId: Int, val event: NotificationEvent, val original: String)
 
     private fun ensureChannel() {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -436,8 +620,18 @@ class NotificationReceiver(
         private const val MAX_LINES = 10
         private const val RETRY_INTERVAL_MS = 60_000L
         private const val MAX_RETRY = 5
+        private const val ACK_TIMEOUT_MS = 15_000L
 
-        /** 来电/拨号/联系人类应用：点击其同步通知时打开 MyMesag，避免跳本机拨号器误记录通话。 */
+        // 内联回复/标记已读广播携带的 extras 与 RemoteInput 结果键
+        private const val EXTRA_REPLY_TO = "extra_reply_to"
+        private const val EXTRA_PKG = "extra_pkg"
+        private const val EXTRA_TARGET = "extra_target"
+        private const val EXTRA_NOTIF_ID = "extra_notif_id"
+        private const val EXTRA_EVENT = "extra_event"
+        private const val EXTRA_ORIGINAL = "extra_original"
+        private const val KEY_REPLY_TEXT = "inline_reply_text"
+
+        /** 来电/拨号/联系人类应用包名兜底列表（主判据为通知类别 CATEGORY_CALL）：点击跳回本机拨号器并预填号码。 */
         private val CALL_APP_PACKAGES = setOf(
             // AOSP / 小米 / OPPO / vivo
             "com.android.incallui", "com.android.dialer", "com.android.phone",

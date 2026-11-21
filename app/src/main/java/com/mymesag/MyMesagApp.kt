@@ -73,6 +73,10 @@ class MyMesagApp : Application() {
 
     val replyAckReceiver: ReplyAckReceiver by lazy { ReplyAckReceiver(MqttConnection.manager, deviceIdentity) }
 
+    val notificationReceiver: NotificationReceiver by lazy {
+        NotificationReceiver(this, MqttConnection.manager, deviceIdentity)
+    }
+
     val markReadHandler: MarkReadHandler by lazy {
         MarkReadHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache)
     }
@@ -106,7 +110,7 @@ class MyMesagApp : Application() {
             }
         }
         // B 端通知还原：订阅 notify/{userId}/+ 并处理收到的通知事件
-        NotificationReceiver(this, MqttConnection.manager, deviceIdentity).start()
+        notificationReceiver.start()
         // B 端补发响应：订阅 syncreq/{userId}/+，响应接收端重连后的补全请求
         syncRequestHandler.start()
         // A 端回复处理：订阅 reply/{userId}/+ 并执行回复、回传 ack

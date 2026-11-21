@@ -65,6 +65,13 @@
             android:name=".service.MqttForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name=".notification.InlineReplyReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".notification.InlineMarkReadReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>
