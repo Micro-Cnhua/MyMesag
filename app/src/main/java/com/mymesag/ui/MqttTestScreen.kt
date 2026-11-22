@@ -14,14 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -154,7 +148,7 @@ fun MqttTestScreen(onBack: () -> Unit, viewModel: MqttViewModel = viewModel()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Subscriptions,
+                            AppIcons.Subscriptions,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -224,7 +218,7 @@ fun MqttTestScreen(onBack: () -> Unit, viewModel: MqttViewModel = viewModel()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.ListAlt,
+                            AppIcons.ListAlt,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -261,11 +255,11 @@ fun MqttTestScreen(onBack: () -> Unit, viewModel: MqttViewModel = viewModel()) {
 @Composable
 private fun StatusCard(state: MqttState) {
     val (text, color, icon) = when (state) {
-        MqttState.DISCONNECTED -> Triple("未连接", Color(0xFF757575), Icons.Default.CloudQueue)
-        MqttState.CONNECTING -> Triple("连接中...", Color(0xFFFFA000), Icons.Default.CloudUpload)
-        MqttState.CONNECTED -> Triple("已连接", Color(0xFF2E7D32), Icons.Default.CloudDone)
+        MqttState.DISCONNECTED -> Triple("未连接", Color(0xFF757575), AppIcons.CloudQueue)
+        MqttState.CONNECTING -> Triple("连接中...", Color(0xFFFFA000), AppIcons.CloudUpload)
+        MqttState.CONNECTED -> Triple("已连接", Color(0xFF2E7D32), AppIcons.CloudDone)
         MqttState.RECONNECTING -> Triple("重连中...", Color(0xFFFF6F00), Icons.Default.Refresh)
-        MqttState.ERROR -> Triple("连接错误", Color(0xFFC62828), Icons.Default.CloudOff)
+        MqttState.ERROR -> Triple("连接错误", Color(0xFFC62828), AppIcons.CloudOff)
     }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Row(

@@ -14,14 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -116,13 +109,13 @@ fun SyncSettingsScreen(
                 onClick = { NotificationAccess.openAppInfo(context) }
             )
             ActionButton(
-                icon = Icons.Default.Cloud,
+                icon = AppIcons.Cloud,
                 title = "MQTT 配置",
                 description = "配置服务器连接",
                 onClick = onOpenMqtt
             )
             ActionButton(
-                icon = Icons.Default.Devices,
+                icon = AppIcons.Devices,
                 title = "设备配对",
                 description = "配对其他设备",
                 onClick = onOpenPair
@@ -179,7 +172,7 @@ fun SyncSettingsScreen(
             }
 
             ActionButton(
-                icon = Icons.Default.MenuBook,
+                icon = AppIcons.MenuBook,
                 title = "额外帮助",
                 description = "查看在线额外帮助",
                 onClick = onOpenManual
@@ -241,7 +234,7 @@ private fun TutorialCard() {
                     fontWeight = FontWeight.Bold
                 )
                 Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                     contentDescription = if (expanded) "收起" else "展开",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -409,7 +402,7 @@ private fun SystemSettingsSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.BatteryFull,
+                    AppIcons.BatteryFull,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -430,7 +423,7 @@ private fun SystemSettingsSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.PowerSettingsNew,
+                    AppIcons.PowerSettingsNew,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)

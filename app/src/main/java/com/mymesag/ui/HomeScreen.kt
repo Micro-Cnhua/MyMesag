@@ -17,16 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.DevicesOther
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -162,7 +155,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.SystemUpdate,
+                            AppIcons.SystemUpdate,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(24.dp)
@@ -213,7 +206,7 @@ fun HomeScreen(
             Spacer(Modifier.height(4.dp))
 
             StatusItem(
-                icon = if (mqttState == MqttState.CONNECTED) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                icon = if (mqttState == MqttState.CONNECTED) AppIcons.CloudDone else AppIcons.CloudOff,
                 title = "MQTT 连接",
                 status = when (mqttState) {
                     MqttState.CONNECTED -> "已连接"
@@ -226,21 +219,21 @@ fun HomeScreen(
                 onClick = onOpenMqtt
             )
             StatusItem(
-                icon = if (notificationAccess) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                icon = if (notificationAccess) Icons.Default.Notifications else AppIcons.NotificationsOff,
                 title = "通知使用权",
                 status = if (notificationAccess) "已开启" else "未开启",
                 isOk = notificationAccess,
                 onClick = { NotificationAccess.openSettings(context) }
             )
             StatusItem(
-                icon = Icons.Default.DevicesOther,
+                icon = AppIcons.DevicesOther,
                 title = "配对设备",
                 status = "$pairedDevices 台设备",
                 isOk = pairedDevices > 0,
                 onClick = onOpenPair
             )
             StatusItem(
-                icon = Icons.Default.Router,
+                icon = AppIcons.Router,
                 title = "MQTT 服务器",
                 status = savedBroker ?: "未配置",
                 isOk = !savedBroker.isNullOrBlank(),
@@ -351,7 +344,7 @@ private fun StatusItem(
     onClick: () -> Unit
 ) {
     val statusColor = if (isOk) Color(0xFF2E7D32) else Color(0xFFC62828)
-    val statusIcon = if (isOk) Icons.Default.CheckCircle else Icons.Default.Error
+    val statusIcon = if (isOk) Icons.Default.CheckCircle else AppIcons.Error
     ElevatedCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth()

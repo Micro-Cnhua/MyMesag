@@ -1,6 +1,8 @@
 package com.mymesag.ui
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,18 +17,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,6 +50,14 @@ import com.mymesag.network.MqttState
 fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let { viewModel.onScanned(it) }
+    }
+    val context = LocalContext.current
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val bitmap = runCatching {
+            context.contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it) }
+        }.getOrNull()
+        viewModel.onImageResult(bitmap?.let { QrCode.decode(it) })
     }
     val mqttState by MqttConnection.manager.state.collectAsState()
     val mqttConnected = mqttState == MqttState.CONNECTED
@@ -84,7 +90,7 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.CloudOff,
+                            AppIcons.CloudOff,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
@@ -107,7 +113,7 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.VerifiedUser,
+                            AppIcons.VerifiedUser,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -147,7 +153,7 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.QrCodeScanner,
+                            AppIcons.QrCodeScanner,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -157,35 +163,25 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = {
-                            scanLauncher.launch(ScanOptions().apply { setPrompt("扫描对方二维码") })
+                            scanLauncher.launch(ScanOptions().apply {
+                                setPrompt("扫描对方二维码")
+                            })
                         },
                         enabled = mqttConnected,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(AppIcons.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
                         Text("  扫描对方二维码")
                     }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("手动配对", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = viewModel.manualInput,
-                        onValueChange = { viewModel.manualInput = it },
-                        label = { Text("粘贴对方配对 JSON") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
-                        onClick = { viewModel.onManualInput() },
+                        onClick = { imageLauncher.launch("image/*") },
                         enabled = mqttConnected,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("手动解析") }
+                    ) {
+                        Icon(AppIcons.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Text("  从相册选择二维码图片")
+                    }
                 }
             }
 
@@ -195,7 +191,7 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.VerifiedUser,
+                                AppIcons.VerifiedUser,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)

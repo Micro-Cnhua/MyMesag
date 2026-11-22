@@ -1,6 +1,7 @@
 package com.mymesag.ui
 
 import android.app.Application
+import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,14 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
 
     fun connect() {
         val broker = brokerUrl.trim()
+        if (broker.isBlank()) {
+            Toast.makeText(app, "请先填写 MQTT 服务器地址", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!BROKER_REGEX.matches(broker)) {
+            Toast.makeText(app, "服务器地址格式不正确，应如 tcp://主机:1883", Toast.LENGTH_SHORT).show()
+            return
+        }
         val cid = clientId.trim().ifBlank { newClientId() }
         val tag = deviceTag.trim()
         if (tag.isNotEmpty() && !DEVICE_TAG_REGEX.matches(tag)) {
@@ -96,5 +105,6 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private val DEVICE_TAG_REGEX = Regex("^[A-Za-z0-9]{1,8}$")
+        private val BROKER_REGEX = Regex("^(tcp|ssl|ws|wss)://[^\\s/:]+(:\\d{1,5})?$")
     }
 }

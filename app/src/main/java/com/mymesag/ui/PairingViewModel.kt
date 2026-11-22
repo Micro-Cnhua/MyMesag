@@ -18,7 +18,6 @@ class PairingViewModel(application: Application) : AndroidViewModel(application)
     var myQrContent by mutableStateOf("")
     var myFingerprint by mutableStateOf("")
     var peerFingerprint by mutableStateOf("")
-    var manualInput by mutableStateOf("")
     var status by mutableStateOf("")
     var paired by mutableStateOf(false)
     var pairedDevices by mutableStateOf<List<PairingManager.PairingInfo>>(emptyList())
@@ -45,8 +44,12 @@ class PairingViewModel(application: Application) : AndroidViewModel(application)
         status = "请比对两侧指纹一致后确认"
     }
 
-    fun onManualInput() {
-        onScanned(manualInput.trim())
+    fun onImageResult(text: String?) {
+        if (text == null) {
+            status = "图片中未识别到二维码"
+            return
+        }
+        onScanned(text)
     }
 
     fun confirmPairing() {

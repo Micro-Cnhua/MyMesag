@@ -51,6 +51,11 @@
             android:exported="false"
             android:theme="@style/Theme.MyMesag" />
 
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="locked"
+            tools:replace="android:screenOrientation" />
+
         <service
             android:name=".service.NotifyListenerService"
             android:exported="true"
