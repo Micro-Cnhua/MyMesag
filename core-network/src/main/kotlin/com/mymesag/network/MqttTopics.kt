@@ -1,34 +1,36 @@
 package com.mymesag.network
 
+import com.mymesag.crypto.SessionKeys
+
 /**
  * 主题构造（对应项目书 3.3 表 7）。
- * 发布方使用自身 deviceId；订阅方按 userId 前缀的订阅表达式接收。
+ * 路由段为 HMAC(groupToken, channel)，不再暴露 userId；发布方使用自身 deviceId，
+ * 订阅方按通配表达式接收。groupToken 只在配对双方之间共享。
  */
 object MqttTopics {
 
-    fun notify(userId: String, deviceId: String) = "notify/$userId/$deviceId"
-    fun notifyWildcard(userId: String) = "notify/$userId/+"
+    fun notify(groupToken: String, deviceId: String) = "notify/${token(groupToken, "notify")}/$deviceId"
+    fun notifyWildcard(groupToken: String) = "notify/${token(groupToken, "notify")}/+"
 
-    fun reply(userId: String, deviceId: String) = "reply/$userId/$deviceId"
-    fun replyWildcard(userId: String) = "reply/$userId/+"
+    fun reply(groupToken: String, deviceId: String) = "reply/${token(groupToken, "reply")}/$deviceId"
+    fun replyWildcard(groupToken: String) = "reply/${token(groupToken, "reply")}/+"
 
-    fun markRead(userId: String, deviceId: String) = "markread/$userId/$deviceId"
-    fun markReadWildcard(userId: String) = "markread/$userId/+"
+    fun markRead(groupToken: String, deviceId: String) = "markread/${token(groupToken, "markread")}/$deviceId"
+    fun markReadWildcard(groupToken: String) = "markread/${token(groupToken, "markread")}/+"
 
-    fun ack(userId: String, deviceId: String) = "ack/$userId/$deviceId"
-    fun ackWildcard(userId: String) = "ack/$userId/+"
+    fun ack(groupToken: String, deviceId: String) = "ack/${token(groupToken, "ack")}/$deviceId"
+    fun ackWildcard(groupToken: String) = "ack/${token(groupToken, "ack")}/+"
 
-    fun call(userId: String, deviceId: String) = "call/$userId/$deviceId"
-    fun callWildcard(userId: String) = "call/$userId/+"
+    fun call(groupToken: String, deviceId: String) = "call/${token(groupToken, "call")}/$deviceId"
+    fun callWildcard(groupToken: String) = "call/${token(groupToken, "call")}/+"
 
-    fun presence(userId: String, deviceId: String) = "presence/$userId/$deviceId"
-    fun presenceWildcard(userId: String) = "presence/$userId/+"
+    fun config(groupToken: String, deviceId: String) = "config/${token(groupToken, "config")}/$deviceId"
+    fun configWildcard(groupToken: String) = "config/${token(groupToken, "config")}/+"
 
-    fun config(userId: String, deviceId: String) = "config/$userId/$deviceId"
-    fun configWildcard(userId: String) = "config/$userId/+"
+    fun syncReq(groupToken: String, deviceId: String) = "syncreq/${token(groupToken, "syncreq")}/$deviceId"
+    fun syncReqWildcard(groupToken: String) = "syncreq/${token(groupToken, "syncreq")}/+"
 
-    fun syncReq(userId: String, deviceId: String) = "syncreq/$userId/$deviceId"
-    fun syncReqWildcard(userId: String) = "syncreq/$userId/+"
+    fun pair(groupToken: String) = "pair/${token(groupToken, "pair")}"
 
-    fun pair(userId: String) = "pair/$userId"
+    private fun token(groupToken: String, channel: String) = SessionKeys.topicToken(groupToken, channel)
 }

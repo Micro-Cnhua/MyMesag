@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
-import com.mymesag.data.followUserIdSubscription
+import com.mymesag.data.followGroupTopicSubscription
 import com.mymesag.model.AckEvent
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.MarkReadEvent
@@ -19,7 +19,7 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 
 /**
- * A 端远程标记已读：订阅 markread/{userId}/+ → 解密请求 → 触发缓存的源应用「标记已读」动作 → 回 ack。
+ * A 端远程标记已读：订阅 markread/{token}/+ → 解密请求 → 触发缓存的源应用「标记已读」动作 → 回 ack。
  * 复用回复链路的 ReplyActionCache.getReadAction 与 ack 通道；动作失效/不存在时回相应原因码（尽力而为）。
  */
 class MarkReadHandler(
@@ -33,7 +33,7 @@ class MarkReadHandler(
     private val json = Json { encodeDefaults = true }
 
     fun start() {
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.markReadWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.markReadWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("markread/")) handle(msg.payload)
@@ -78,7 +78,7 @@ class MarkReadHandler(
     }
 
     private suspend fun ack(event: MarkReadEvent, myId: String, reason: String) {
-        val userId = deviceIdentity.userId()
+        val groupToken = deviceIdentity.groupToken() ?: return
         val ack = AckEvent(
             id = UUID.randomUUID().toString(),
             from = myId,
@@ -88,7 +88,13 @@ class MarkReadHandler(
             reason = reason,
             replyId = event.id
         )
-        manager.publish(MqttTopics.ack(userId, event.from), json.encodeToString(AckEvent.serializer(), ack))
+        val envelope = CryptoManager.encrypt(
+            json.encodeToString(AckEvent.serializer(), ack), myId, event.from
+        ) ?: return
+        manager.publish(
+            MqttTopics.ack(groupToken, event.from),
+            json.encodeToString(EncryptedEnvelope.serializer(), envelope)
+        )
         Log.d(TAG, "markread ack reason=$reason to=${event.from}")
     }
 

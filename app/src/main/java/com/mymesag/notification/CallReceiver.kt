@@ -9,9 +9,11 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mymesag.R
+import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
-import com.mymesag.data.followUserIdSubscription
+import com.mymesag.data.followGroupTopicSubscription
 import com.mymesag.model.CallEvent
+import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttTopics
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +24,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * B 端来电显示（阶段 5 / 项目书 10.2）：
- * 订阅 call/{userId}/+ → 显示「来电」通知（不提供任何接听/挂断按钮，号码为空时降级文案）。
+ * 订阅 call/{token}/+ → 显示「来电」通知（不提供任何接听/挂断按钮，号码为空时降级文案）。
  */
 class CallReceiver(
     private val context: Context,
@@ -33,7 +35,7 @@ class CallReceiver(
     private val json = Json { ignoreUnknownKeys = true }
 
     fun start() {
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.callWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.callWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("call/")) handleCall(msg.payload)
@@ -42,13 +44,24 @@ class CallReceiver(
     }
 
     private suspend fun handleCall(payload: String) {
+        val envelope = try {
+            json.decodeFromString(EncryptedEnvelope.serializer(), payload)
+        } catch (e: Exception) {
+            Log.e(TAG, "decode envelope error: ${e.message}")
+            return
+        }
+        val myId = deviceIdentity.deviceId()
+        // 多设备：只处理发给本机的信封
+        if (envelope.recipientDeviceId != null && envelope.recipientDeviceId != myId) {
+            return
+        }
+        val plaintext = CryptoManager.decrypt(envelope) ?: return
         val event = try {
-            json.decodeFromString(CallEvent.serializer(), payload)
+            json.decodeFromString(CallEvent.serializer(), plaintext)
         } catch (e: Exception) {
             Log.e(TAG, "decode error: ${e.message}")
             return
         }
-        val myId = deviceIdentity.deviceId()
         if (event.from == myId) {
             Log.d(TAG, "skip self call from=${event.from}")
             return

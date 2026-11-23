@@ -50,6 +50,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mymesag.MyMesagApp
+import com.mymesag.data.MqttAutoConnect
 import com.mymesag.data.MqttConnection
 import com.mymesag.network.MqttConfig
 import com.mymesag.network.MqttState
@@ -249,14 +250,21 @@ fun HomeScreen(
                     OutlinedButton(
                         onClick = {
                             scope.launch {
-                                MqttConnection.manager.disconnect()
-                                delay(500)
                                 val broker = app.mqttConfigStore.savedBrokerUrl()
                                 val clientId = app.mqttConfigStore.savedClientId()
                                 val username = app.mqttConfigStore.savedUsername()
                                 val password = app.mqttConfigStore.savedPassword()
+                                // 先校验再断开，避免拒绝后把用户留在离线状态
+                                if (broker != null && MqttAutoConnect.credentialsExposed(broker, username, password)) {
+                                    android.widget.Toast.makeText(
+                                        context, "明文连接会泄露账号密码，请改用 ssl:// 地址",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                    return@launch
+                                }
+                                MqttConnection.manager.disconnect()
+                                delay(500)
                                 val caCertPem = app.mqttConfigStore.savedCaCertPem()
-                                val willTopic = app.presenceManager.willTopic()
                                 val keepAlive = app.mqttConfigStore.savedKeepAlive()
                                 if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
                                     MqttConnection.manager.connect(
@@ -266,8 +274,6 @@ fun HomeScreen(
                                             username = username,
                                             password = password,
                                             keepAliveSeconds = keepAlive,
-                                            willTopic = willTopic,
-                                            willPayload = "offline",
                                             caCertPem = caCertPem
                                         )
                                     )

@@ -72,7 +72,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = ReplyUiState.Failed("NOT_CONNECTED", "本机未连接 MQTT 服务器，无法发送回复")
                 return@launch
             }
-            val userId = app.deviceIdentity.userId()
+            val groupToken = app.deviceIdentity.groupToken() ?: return@launch
             val deviceId = app.deviceIdentity.deviceId()
             val replyId = UUID.randomUUID().toString()
             val event = ReplyEvent(
@@ -97,7 +97,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
             pendingTarget = targetDeviceId
             _state.value = ReplyUiState.Sending
             val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
-            MqttConnection.manager.publish(MqttTopics.reply(userId, targetDeviceId), payload)
+            MqttConnection.manager.publish(MqttTopics.reply(groupToken, targetDeviceId), payload)
             timeoutJob?.cancel()
             timeoutJob = viewModelScope.launch {
                 delay(ACK_TIMEOUT_MS)
@@ -120,7 +120,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = ReplyUiState.Failed("NOT_CONNECTED", "本机未连接 MQTT 服务器，无法标记已读")
                 return@launch
             }
-            val userId = app.deviceIdentity.userId()
+            val groupToken = app.deviceIdentity.groupToken() ?: return@launch
             val deviceId = app.deviceIdentity.deviceId()
             val markReadId = UUID.randomUUID().toString()
             val event = MarkReadEvent(
@@ -143,7 +143,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
             pendingTarget = targetDeviceId
             _state.value = ReplyUiState.Sending
             val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
-            MqttConnection.manager.publish(MqttTopics.markRead(userId, targetDeviceId), payload)
+            MqttConnection.manager.publish(MqttTopics.markRead(groupToken, targetDeviceId), payload)
             timeoutJob?.cancel()
             timeoutJob = viewModelScope.launch {
                 delay(ACK_TIMEOUT_MS)

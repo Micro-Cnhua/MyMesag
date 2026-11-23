@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
-import com.mymesag.data.followUserIdSubscription
+import com.mymesag.data.followGroupTopicSubscription
 import com.mymesag.model.AckEvent
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.ReplyEvent
@@ -23,7 +23,7 @@ import java.util.UUID
 
 /**
  * A 端回复处理（阶段 4 / 项目书 9.3）：
- * 订阅 reply/{userId}/+ → 找到 RemoteInput Action → 执行回复 → 回传 ack（原因码，表 9）。
+ * 订阅 reply/{token}/+ → 找到 RemoteInput Action → 执行回复 → 回传 ack（原因码，表 9）。
  */
 class ReplyHandler(
     private val context: Context,
@@ -35,7 +35,7 @@ class ReplyHandler(
     private val json = Json { encodeDefaults = true }
 
     fun start() {
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.replyWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.replyWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("reply/")) handleReply(msg.payload)
@@ -111,7 +111,7 @@ class ReplyHandler(
     }
 
     private suspend fun ack(event: ReplyEvent, myId: String, reason: String) {
-        val userId = deviceIdentity.userId()
+        val groupToken = deviceIdentity.groupToken() ?: return
         val ack = AckEvent(
             id = UUID.randomUUID().toString(),
             from = myId,
@@ -122,7 +122,11 @@ class ReplyHandler(
             replyId = event.id
         )
         val payload = json.encodeToString(AckEvent.serializer(), ack)
-        manager.publish(MqttTopics.ack(userId, event.from), payload)
+        val envelope = CryptoManager.encrypt(payload, myId, event.from) ?: return
+        manager.publish(
+            MqttTopics.ack(groupToken, event.from),
+            json.encodeToString(EncryptedEnvelope.serializer(), envelope)
+        )
         Log.d(TAG, "ack reason=$reason to=${event.from}")
     }
 

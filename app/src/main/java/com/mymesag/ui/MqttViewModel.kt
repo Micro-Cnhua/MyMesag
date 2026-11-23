@@ -9,10 +9,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mymesag.MyMesagApp
+import com.mymesag.data.MqttAutoConnect
 import com.mymesag.data.MqttConnection
 import com.mymesag.network.MqttConfig
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class MqttViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -52,7 +52,7 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (!BROKER_REGEX.matches(broker)) {
-            Toast.makeText(app, "服务器地址格式不正确，应如 tcp://主机:1883", Toast.LENGTH_SHORT).show()
+            Toast.makeText(app, "服务器地址格式不正确，应如 ssl://主机:8883", Toast.LENGTH_SHORT).show()
             return
         }
         val cid = clientId.trim().ifBlank { newClientId() }
@@ -64,17 +64,22 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
         deviceTagError = null
         val user = username.trim().ifBlank { null }
         val pass = password.ifBlank { null }
+        if (MqttAutoConnect.credentialsExposed(broker, user, pass)) {
+            Toast.makeText(app, "明文连接会泄露账号密码，请改用 ssl:// 地址", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (MqttAutoConnect.isPlaintext(broker)) {
+            Toast.makeText(app, "明文连接：主题与消息元数据对链路可见", Toast.LENGTH_LONG).show()
+        }
         val ca = caCertPem.trim().ifBlank { null }
         _log.add(0, "→ 连接 $broker")
         viewModelScope.launch {
             app.mqttConfigStore.save(broker, cid, user, pass, ca, tag)
-            val willTopic = app.presenceManager.willTopic()
             val keepAlive = app.mqttConfigStore.savedKeepAlive()
             manager.connect(
                 MqttConfig(
                     brokerUrl = broker, clientId = cid, username = user, password = pass,
-                    keepAliveSeconds = keepAlive,
-                    willTopic = willTopic, willPayload = "offline", caCertPem = ca
+                    keepAliveSeconds = keepAlive, caCertPem = ca
                 )
             )
         }
@@ -101,7 +106,7 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun newClientId() = "MyMesag-" + UUID.randomUUID().toString().take(8)
+    private fun newClientId() = MqttAutoConnect.newClientId()
 
     companion object {
         private val DEVICE_TAG_REGEX = Regex("^[A-Za-z0-9]{1,8}$")

@@ -11,8 +11,11 @@ import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.mymesag.MyMesagApp
+import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
 import com.mymesag.model.CallEvent
+import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttTopics
 import kotlinx.coroutines.CoroutineScope
@@ -88,7 +91,7 @@ class CallListener(
             // 只用系统回调的 phoneNumber（API<29 才有）；CallLog 取号在响铃时拿到的是上一次通话，故弃用
             val number = phoneNumber?.takeIf { it.isNotBlank() }
             val contactName = resolveContactName(number)
-            val userId = deviceIdentity.userId()
+            val groupToken = deviceIdentity.groupToken() ?: return@launch
             val deviceId = deviceIdentity.deviceId()
             val event = CallEvent(
                 id = callId,
@@ -101,12 +104,20 @@ class CallListener(
                 subscriptionId = null
             )
             val payload = json.encodeToString(CallEvent.serializer(), event)
-            if (manager.isConnected) {
-                manager.publish(MqttTopics.call(userId, deviceId), payload)
-                Log.d(TAG, "call event state=$state number=$number contact=$contactName")
-            } else {
+            if (!manager.isConnected) {
                 Log.d(TAG, "not connected, skip call event state=$state")
+                return@launch
             }
+            // 号码与联系人姓名属敏感信息：按每个已配对接收方分别加密，broker 只见密文
+            val app = context.applicationContext as MyMesagApp
+            for (peerId in app.pairingManager.pairedDeviceIds()) {
+                val envelope = CryptoManager.encrypt(payload, deviceId, peerId) ?: continue
+                manager.publish(
+                    MqttTopics.call(groupToken, deviceId),
+                    json.encodeToString(EncryptedEnvelope.serializer(), envelope)
+                )
+            }
+            Log.d(TAG, "call event state=$state number=$number contact=$contactName")
         }
     }
 

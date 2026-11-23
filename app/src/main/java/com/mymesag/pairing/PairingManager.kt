@@ -73,17 +73,15 @@ class PairingManager(
 
     suspend fun buildPayload(): PairingPayload {
         val kp = myKeyPair()
-        val userId = deviceIdentity.userId()
         val deviceId = deviceIdentity.deviceId()
         val broker = dataStore.data.first()[KEY_BROKER] ?: ""
         return PairingPayload(
-            userId = userId,
+            groupToken = deviceIdentity.groupToken() ?: "",
             deviceId = deviceId,
             deviceName = deviceName(),
             pubKey = Base64.encodeToString(kp.publicKey, Base64.NO_WRAP),
             fingerprint = SessionKeys.fingerprint(kp.publicKey),
-            broker = broker,
-            topicPrefix = userId
+            broker = broker
         )
     }
 
@@ -103,17 +101,31 @@ class PairingManager(
             it[KEY_PEERS] = secure.encrypt(json.encodeToString(ListSerializer(PeerRecord.serializer()), peers))
             it[KEY_BROKER] = peer.broker
         }
-        // 确定性统一 userId：取较小值，避免双方同时扫旧二维码导致互换
-        val myUserId = deviceIdentity.userId()
-        val unifiedUserId = if (myUserId < peer.userId) myUserId else peer.userId
-        deviceIdentity.setUserId(unifiedUserId)
+        // 组令牌协商：加入既有组时沿用该组令牌；双方都无组时从会话密钥确定性派生，两端结果一致
+        val myToken = deviceIdentity.groupToken() ?: ""
+        val groupToken = when {
+            myToken.isBlank() && peer.groupToken.isBlank() -> SessionKeys.deriveGroupToken(sessionKey)
+            peer.groupToken.isBlank() -> myToken
+            myToken.isBlank() -> peer.groupToken
+            // 两个既有组合并：取字典序较小者，与扫码顺序无关
+            else -> minOf(myToken, peer.groupToken)
+        }
+        deviceIdentity.setGroupToken(groupToken)
         CryptoManager.setKey(peer.deviceId, sessionKey)
         return PairingResult(success = true, fingerprint = computedFingerprint, reason = "OK")
     }
 
     /** 应用启动时加载所有已保存的会话密钥。 */
     suspend fun loadSessionKeys() {
-        for (peer in loadPeers()) {
+        val peers = loadPeers()
+        if (peers.isNotEmpty() && deviceIdentity.groupToken().isNullOrBlank()) {
+            // 旧版按明文 userId 路由，升级后必须重新配对协商 groupToken
+            dataStore.edit { it.remove(KEY_PEERS) }
+            CryptoManager.clearKeys()
+            Log.i(TAG, "legacy pairing cleared, please re-pair")
+            return
+        }
+        for (peer in peers) {
             CryptoManager.setKey(peer.deviceId, Base64.decode(peer.keyBase64, Base64.NO_WRAP))
         }
     }
@@ -145,7 +157,7 @@ class PairingManager(
             it.remove(KEY_PEERS)
             it.remove(KEY_BROKER)
         }
-        deviceIdentity.resetUserId()
+        deviceIdentity.resetGroupToken()
         CryptoManager.clearKeys()
     }
 

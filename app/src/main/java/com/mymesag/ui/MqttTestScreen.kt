@@ -76,7 +76,7 @@ fun MqttTestScreen(onBack: () -> Unit, viewModel: MqttViewModel = viewModel()) {
                         value = viewModel.brokerUrl,
                         onValueChange = { viewModel.brokerUrl = it },
                         label = { Text("Broker 地址") },
-                        placeholder = { Text("tcp://host:1883 或 ssl://host:8883") },
+                        placeholder = { Text("ssl://host:8883（推荐）或 tcp://host:1883") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

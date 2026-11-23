@@ -6,11 +6,11 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class PairingPayload(
     val v: Int = 1,
-    val userId: String,
+    /** 已有组的路由令牌；未配对设备留空，由配对协商确定。 */
+    val groupToken: String = "",
     val deviceId: String,
     val deviceName: String,
     val pubKey: String,
     val fingerprint: String,
-    val broker: String,
-    val topicPrefix: String
+    val broker: String
 )

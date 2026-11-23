@@ -6,7 +6,7 @@ import com.mymesag.MyMesagApp
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
 import com.mymesag.data.SentNotifyCache
-import com.mymesag.data.followUserIdSubscription
+import com.mymesag.data.followGroupTopicSubscription
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.NotificationEvent
 import com.mymesag.model.SyncDoneEvent
@@ -22,7 +22,7 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 
 /**
- * B 端补发响应：订阅 syncreq/{userId}/+ → 解密请求 → 从已发送内容缓存重放 ts>sinceTs 的通知
+ * B 端补发响应：订阅 syncreq/{token}/+ → 解密请求 → 从已发送内容缓存重放 ts>sinceTs 的通知
  * （只加密给请求方，publish 到 notify 主题，复用 A 端现有接收）→ 必发 SyncDone 让 A 停止重试。
  */
 class SyncRequestHandler(
@@ -35,7 +35,7 @@ class SyncRequestHandler(
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun start() {
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("syncreq/")) handle(msg.payload)
@@ -61,9 +61,9 @@ class SyncRequestHandler(
             return
         }
 
-        val userId = deviceIdentity.userId()
+        val groupToken = deviceIdentity.groupToken() ?: return
         val events = cache.replaySince(req.sinceTs, REPLAY_LIMIT)
-        val notifyTopic = MqttTopics.notify(userId, myId)
+        val notifyTopic = MqttTopics.notify(groupToken, myId)
         var upToTs = req.sinceTs
         for (e in events) {
             val plain = json.encodeToString(NotificationEvent.serializer(), e)
@@ -84,7 +84,7 @@ class SyncRequestHandler(
         val donePlain = json.encodeToString(SyncDoneEvent.serializer(), done)
         val doneEnv = CryptoManager.encrypt(donePlain, myId, req.from) ?: return
         manager.publish(
-            MqttTopics.syncReq(userId, req.from),
+            MqttTopics.syncReq(groupToken, req.from),
             json.encodeToString(EncryptedEnvelope.serializer(), doneEnv)
         )
         Log.d(TAG, "sync replay done to=${req.from} count=${events.size} upToTs=$upToTs")

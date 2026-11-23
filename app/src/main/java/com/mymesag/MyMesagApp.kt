@@ -22,7 +22,6 @@ import com.mymesag.data.SyncedNotifyStore
 import com.mymesag.data.db.AppDatabase
 import com.mymesag.notification.CallReceiver
 import com.mymesag.notification.NotificationReceiver
-import com.mymesag.notification.PresenceManager
 import com.mymesag.notification.SyncRequestHandler
 import com.mymesag.pairing.PairingManager
 import com.mymesag.reply.ReplyActionCache
@@ -69,8 +68,6 @@ class MyMesagApp : Application() {
 
     val pairingManager: PairingManager by lazy { PairingManager(this, deviceIdentity, dataStore, secureStorage) }
 
-    val presenceManager: PresenceManager by lazy { PresenceManager(MqttConnection.manager, deviceIdentity) }
-
     val replyAckReceiver: ReplyAckReceiver by lazy { ReplyAckReceiver(MqttConnection.manager, deviceIdentity) }
 
     val notificationReceiver: NotificationReceiver by lazy {
@@ -109,22 +106,20 @@ class MyMesagApp : Application() {
                 sessionKeysLoaded.complete(Unit)
             }
         }
-        // B 端通知还原：订阅 notify/{userId}/+ 并处理收到的通知事件
+        // B 端通知还原：订阅 notify/{token}/+ 并处理收到的通知事件
         notificationReceiver.start()
-        // B 端补发响应：订阅 syncreq/{userId}/+，响应接收端重连后的补全请求
+        // B 端补发响应：订阅 syncreq/{token}/+，响应接收端重连后的补全请求
         syncRequestHandler.start()
-        // A 端回复处理：订阅 reply/{userId}/+ 并执行回复、回传 ack
+        // A 端回复处理：订阅 reply/{token}/+ 并执行回复、回传 ack
         ReplyHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache).start()
-        // B 端回执接收：订阅 ack/{userId}/+，把真实原因码交给回复界面
+        // B 端回执接收：订阅 ack/{token}/+，把真实原因码交给回复界面
         replyAckReceiver.start()
-        // A 端远程标记已读：订阅 markread/{userId}/+，触发源应用「标记已读」动作并回 ack
+        // A 端远程标记已读：订阅 markread/{token}/+，触发源应用「标记已读」动作并回 ack
         markReadHandler.start()
-        // B 端来电显示：订阅 call/{userId}/+
+        // B 端来电显示：订阅 call/{token}/+
         CallReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端来电监听：监听通话状态并发布 CallEvent
         CallListener(this, MqttConnection.manager, deviceIdentity).start()
-        // 在线状态（presence + LWT）
-        presenceManager.start()
         // 前台服务保活 + 自动连接 + 网络切换监听
         startKeepAliveService()
     }
@@ -140,7 +135,7 @@ class MyMesagApp : Application() {
             it.remove(KEY_MQTT_PASSWORD)
             it[KEY_STORAGE_VERSION] = STORAGE_VERSION
         }
-        deviceIdentity.resetUserId()
+        deviceIdentity.resetGroupToken()
         CryptoManager.clearKeys()
         Log.i(TAG, "storage upgraded to encrypted: pairing + password reset, please re-pair")
     }

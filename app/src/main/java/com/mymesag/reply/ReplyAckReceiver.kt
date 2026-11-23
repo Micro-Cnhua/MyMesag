@@ -1,9 +1,11 @@
 package com.mymesag.reply
 
 import android.util.Log
+import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
-import com.mymesag.data.followUserIdSubscription
+import com.mymesag.data.followGroupTopicSubscription
 import com.mymesag.model.AckEvent
+import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.network.MqttManager
 import com.mymesag.network.MqttTopics
 import kotlinx.coroutines.CoroutineScope
@@ -17,8 +19,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 /**
- * B 端回执接收：订阅 ack/{userId}/+，解析 A 端回传的明文 AckEvent 并广播给回复界面。
- * 订阅跟随 userId 变化（配对统一后无需重启）。回执按 replyId / replyToId 由 ViewModel 精确匹配。
+ * B 端回执接收：订阅 ack/{token}/+，解密 A 端回传的信封得到 AckEvent 并广播给回复界面。
+ * 订阅跟随 groupToken 变化（配对统一后无需重启）。回执按 replyId / replyToId 由 ViewModel 精确匹配。
  */
 class ReplyAckReceiver(
     private val manager: MqttManager,
@@ -34,12 +36,19 @@ class ReplyAckReceiver(
     val acks: SharedFlow<AckEvent> = _acks.asSharedFlow()
 
     fun start() {
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.ackWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.ackWildcard(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (!msg.topic.startsWith("ack/")) return@collect
+                val envelope = runCatching {
+                    json.decodeFromString(EncryptedEnvelope.serializer(), msg.payload)
+                }.getOrNull() ?: return@collect
+                val myId = deviceIdentity.deviceId()
+                // 多设备：只处理发给本机的信封
+                if (envelope.recipientDeviceId != null && envelope.recipientDeviceId != myId) return@collect
+                val plaintext = CryptoManager.decrypt(envelope) ?: return@collect
                 val ack = runCatching {
-                    json.decodeFromString(AckEvent.serializer(), msg.payload)
+                    json.decodeFromString(AckEvent.serializer(), plaintext)
                 }.getOrNull() ?: return@collect
                 Log.d(TAG, "ack reason=${ack.reason} replyId=${ack.replyId} to=${ack.to}")
                 _acks.tryEmit(ack)

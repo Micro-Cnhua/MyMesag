@@ -14,7 +14,7 @@ import com.mymesag.MyMesagApp
 import com.mymesag.R
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
-import com.mymesag.data.followUserIdSubscription
+import com.mymesag.data.followGroupTopicSubscription
 import com.mymesag.model.AckEvent
 import com.mymesag.model.EncryptedEnvelope
 import com.mymesag.model.MarkReadEvent
@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * B 端通知还原（阶段 3）：
- * 订阅 notify/{userId}/+ → 反序列化 NotificationEvent → 用 NotificationManager 重建通知，
+ * 订阅 notify/{token}/+ → 反序列化 NotificationEvent → 用 NotificationManager 重建通知，
  * 点击跳转对应 App（受限时降级到应用详情页），并带防回环标记（不变量 2）。
  */
 class NotificationReceiver(
@@ -64,9 +64,9 @@ class NotificationReceiver(
     private var retryJob: Job? = null
 
     fun start() {
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.notifyWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.notifyWildcard(it) }, TAG)
         // 订阅 syncreq 通道以接收 B 的补全完成信号（SyncDone）
-        scope.followUserIdSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
         scope.launch {
             // 等待会话密钥加载完成再处理消息
             val app = context.applicationContext as MyMesagApp
@@ -403,7 +403,7 @@ class NotificationReceiver(
             postReplyStatus(event, notifId, original, "✗ 本机未连接 MQTT，无法回复", allowReply = true)
             return
         }
-        val userId = deviceIdentity.userId()
+        val groupToken = deviceIdentity.groupToken() ?: return
         val myId = deviceIdentity.deviceId()
         val replyId = UUID.randomUUID().toString()
         val ev = ReplyEvent(
@@ -418,7 +418,7 @@ class NotificationReceiver(
         }
         pendingInlineReplies[replyId] = PendingReply(notifId, event, original)
         postReplyStatus(event, notifId, original, "回复发送中，等待对方回执…", allowReply = false)
-        manager.publish(MqttTopics.reply(userId, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        manager.publish(MqttTopics.reply(groupToken, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
         scope.launch {
             delay(ACK_TIMEOUT_MS)
             val p = pendingInlineReplies.remove(replyId) ?: return@launch
@@ -436,7 +436,7 @@ class NotificationReceiver(
             toast("本机未连接 MQTT，无法标记已读")
             return
         }
-        val userId = deviceIdentity.userId()
+        val groupToken = deviceIdentity.groupToken() ?: return
         val myId = deviceIdentity.deviceId()
         val ev = MarkReadEvent(
             id = UUID.randomUUID().toString(), from = myId, to = target,
@@ -447,7 +447,7 @@ class NotificationReceiver(
             toast("缺少会话密钥，请重新配对后再试")
             return
         }
-        manager.publish(MqttTopics.markRead(userId, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        manager.publish(MqttTopics.markRead(groupToken, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
         // 按需求：点击后直接撤下该通知，不再跳转应用二次确认
         dismissNotification(notifId, event)
         Log.d(TAG, "inline markread sent replyToId=$replyToId pkg=$pkg")
@@ -561,24 +561,24 @@ class NotificationReceiver(
             app.awaitSessionKeys()
             if (!app.appFilterRepository.syncReceiveEnabled.first()) return@launch
             val myId = deviceIdentity.deviceId()
-            val userId = deviceIdentity.userId()
+            val groupToken = deviceIdentity.groupToken() ?: return@launch
             val peers = app.pairingManager.pairedDeviceIds()
             if (peers.isEmpty()) return@launch
             peers.forEach { pendingRecovery[it] = true }
             // 首轮立即请求
-            peers.forEach { sendSyncRequest(userId, myId, it) }
+            peers.forEach { sendSyncRequest(groupToken, myId, it) }
             // 重试：每 RETRY_INTERVAL_MS 一轮，最多 MAX_RETRY 轮，全部补全即停
             var round = 0
             while (isActive && round < MAX_RETRY && pendingRecovery.values.any { it }) {
                 delay(RETRY_INTERVAL_MS)
                 round++
                 if (!manager.isConnected) break
-                peers.forEach { b -> if (pendingRecovery[b] == true) sendSyncRequest(userId, myId, b) }
+                peers.forEach { b -> if (pendingRecovery[b] == true) sendSyncRequest(groupToken, myId, b) }
             }
         }
     }
 
-    private suspend fun sendSyncRequest(userId: String, myId: String, target: String) {
+    private suspend fun sendSyncRequest(groupToken: String, myId: String, target: String) {
         val app = context.applicationContext as MyMesagApp
         val since = app.receivedNotifyStore.watermark(target)
         val req = SyncRequestEvent(
@@ -590,7 +590,7 @@ class NotificationReceiver(
         )
         val plain = json.encodeToString(SyncRequestEvent.serializer(), req)
         val env = CryptoManager.encrypt(plain, myId, target) ?: return
-        manager.publish(MqttTopics.syncReq(userId, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        manager.publish(MqttTopics.syncReq(groupToken, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
         Log.d(TAG, "sync request sent to=$target sinceTs=$since")
     }
 
@@ -618,8 +618,8 @@ class NotificationReceiver(
         const val CHANNEL_ID = "synced_notifications"
         private const val TAG = "NotifReceiver"
         private const val MAX_LINES = 10
-        private const val RETRY_INTERVAL_MS = 60_000L
-        private const val MAX_RETRY = 5
+        private const val RETRY_INTERVAL_MS = 20_000L
+        private const val MAX_RETRY = 9
         private const val ACK_TIMEOUT_MS = 15_000L
 
         // 内联回复/标记已读广播携带的 extras 与 RemoteInput 结果键

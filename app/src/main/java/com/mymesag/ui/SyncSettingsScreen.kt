@@ -1,5 +1,6 @@
 package com.mymesag.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mymesag.MyMesagApp
+import com.mymesag.data.MqttAutoConnect
 import com.mymesag.data.MqttConfigStore
 import com.mymesag.data.MqttConnection
 import com.mymesag.network.MqttConfig
@@ -368,8 +370,11 @@ private fun SystemSettingsSection(
                                     if (!broker.isNullOrBlank() && !clientId.isNullOrBlank()) {
                                         val username = app.mqttConfigStore.savedUsername()
                                         val password = app.mqttConfigStore.savedPassword()
+                                        if (MqttAutoConnect.credentialsExposed(broker, username, password)) {
+                                            Toast.makeText(context, "明文连接会泄露账号密码，请改用 ssl:// 地址", Toast.LENGTH_LONG).show()
+                                            return@launch
+                                        }
                                         val caCertPem = app.mqttConfigStore.savedCaCertPem()
-                                        val willTopic = app.presenceManager.willTopic()
                                         MqttConnection.manager.disconnect()
                                         delay(500)
                                         MqttConnection.manager.connect(
@@ -377,7 +382,6 @@ private fun SystemSettingsSection(
                                                 brokerUrl = broker, clientId = clientId,
                                                 username = username, password = password,
                                                 keepAliveSeconds = seconds,
-                                                willTopic = willTopic, willPayload = "offline",
                                                 caCertPem = caCertPem
                                             )
                                         )

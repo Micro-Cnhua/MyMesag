@@ -31,11 +31,9 @@ data class MqttConfig(
     val clientId: String,
     val username: String? = null,
     val password: String? = null,
-    val keepAliveSeconds: Int = 120,
+    val keepAliveSeconds: Int = 60,
     val cleanSession: Boolean = true,
-    val connectionTimeoutSeconds: Int = 30,
-    val willTopic: String? = null,
-    val willPayload: String? = null,
+    val connectionTimeoutSeconds: Int = 15,
     val caCertPem: String? = null
 )
 
@@ -72,7 +70,7 @@ class MqttManager(private val scope: CoroutineScope) {
     private val baseReconnectDelayMs = 2000L
 
     /** 快速退避用尽后的降频间隔：断线期间每隔此时长才真正试连一次（不再永久放弃）。 */
-    private val plateauReconnectDelayMs = 60_000L
+    private val plateauReconnectDelayMs = 30_000L
 
     /**
      * 本地网络是否可用（免费查询，不唤醒射频）。由 app 层注入 ConnectivityManager 判断；
@@ -143,9 +141,6 @@ class MqttManager(private val scope: CoroutineScope) {
                     isAutomaticReconnect = false
                     if (!cfg.username.isNullOrEmpty()) userName = cfg.username
                     if (!cfg.password.isNullOrEmpty()) password = cfg.password.toCharArray()
-                    if (!cfg.willTopic.isNullOrEmpty() && cfg.willPayload != null) {
-                        setWill(cfg.willTopic, cfg.willPayload.toByteArray(Charsets.UTF_8), 1, true)
-                    }
                     if (!cfg.caCertPem.isNullOrBlank()) {
                         socketFactory = getSslSocketFactory(cfg.caCertPem)
                     }
@@ -173,7 +168,7 @@ class MqttManager(private val scope: CoroutineScope) {
         }
     }
 
-    /** 退订并从订阅表移除，避免重连时用旧主题重新订阅（userId 变化后重建订阅用）。 */
+    /** 退订并从订阅表移除，避免重连时用旧主题重新订阅（groupToken 变化后重建订阅用）。 */
     fun unsubscribe(topic: String) {
         if (topic.isBlank()) return
         subscriptions.removeIf { it.first == topic }

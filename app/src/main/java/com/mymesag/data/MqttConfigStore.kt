@@ -80,6 +80,6 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
         private val KEY_DEVICE_TAG = stringPreferencesKey("mqtt_device_tag")
         private val KEY_KEEPALIVE = intPreferencesKey("mqtt_keepalive")
 
-        const val DEFAULT_KEEPALIVE = 120
+        const val DEFAULT_KEEPALIVE = 60
     }
 }

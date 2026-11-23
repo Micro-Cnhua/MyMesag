@@ -19,6 +19,7 @@ android {
 
 dependencies {
     implementation(project(":core-model"))
+    implementation(project(":core-crypto"))
     implementation(libs.paho.mqttv3)
     implementation(libs.kotlinx.coroutines.core)
 }

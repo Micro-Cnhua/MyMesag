@@ -164,7 +164,7 @@ class NotifyListenerService : NotificationListenerService() {
                     return@launch
                 }
 
-                val userId = app.deviceIdentity.userId()
+                val groupToken = app.deviceIdentity.groupToken() ?: return@launch
                 val deviceId = app.deviceIdentity.deviceId()
                 val deviceTag = app.mqttConfigStore.savedDeviceTag() ?: ""
 
@@ -210,9 +210,9 @@ class NotifyListenerService : NotificationListenerService() {
     }
 
     private suspend fun publishEvent(event: NotificationEvent) {
-        val userId = app.deviceIdentity.userId()
+        val groupToken = app.deviceIdentity.groupToken() ?: return
         val deviceId = app.deviceIdentity.deviceId()
-        val topic = MqttTopics.notify(userId, deviceId)
+        val topic = MqttTopics.notify(groupToken, deviceId)
         val plaintext = json.encodeToString(NotificationEvent.serializer(), event)
         // 多设备两两密钥：按每个接收方分别加密，接收方凭 recipientDeviceId 过滤
         var published = false
