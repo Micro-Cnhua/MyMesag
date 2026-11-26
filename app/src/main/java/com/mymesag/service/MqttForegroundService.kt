@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
 
 /**
  * 前台服务（阶段 6）：常驻通知保活 + 自动连接 MQTT + 网络切换监听（网络恢复时主动重连）。
- * foregroundServiceType = dataSync（附录 B）。
+ * foregroundServiceType = remoteMessaging：无累计时长上限，避免 dataSync 的 6 小时/24 小时配额
+ * 耗尽后服务被系统强停、且无法再次启动。
  */
 class MqttForegroundService : Service() {
 

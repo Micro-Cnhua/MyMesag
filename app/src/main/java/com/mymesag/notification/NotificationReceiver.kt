@@ -7,9 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.text.format.DateFormat
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import com.mymesag.BuildConfig
 import com.mymesag.MyMesagApp
 import com.mymesag.R
 import com.mymesag.data.CryptoManager
@@ -37,12 +39,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
+import java.util.Date
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * B 端通知还原（阶段 3）：
- * 订阅 notify/{token}/+ → 反序列化 NotificationEvent → 用 NotificationManager 重建通知，
+ * 订阅 notify/{token} → 反序列化 NotificationEvent → 用 NotificationManager 重建通知，
  * 点击跳转对应 App（受限时降级到应用详情页），并带防回环标记（不变量 2）。
  */
 class NotificationReceiver(
@@ -64,9 +67,7 @@ class NotificationReceiver(
     private var retryJob: Job? = null
 
     fun start() {
-        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.notifyWildcard(it) }, TAG)
-        // 订阅 syncreq 通道以接收 B 的补全完成信号（SyncDone）
-        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.notify(it) }, TAG)
         scope.launch {
             // 等待会话密钥加载完成再处理消息
             val app = context.applicationContext as MyMesagApp
@@ -74,11 +75,13 @@ class NotificationReceiver(
             Log.d(TAG, "session keys loaded, starting message processing")
 
             manager.messages.collect { msg ->
-                when {
-                    msg.topic.startsWith("notify/") -> handleNotification(msg.payload)
-                    msg.topic.startsWith("syncreq/") -> handleSyncDone(msg.payload)
-                }
+                if (msg.topic.startsWith("notify/")) handleNotification(msg.payload)
             }
+        }
+        // 补全完成信号由 SyncRequestHandler 独占解密后转发，避免同一信封被解密两次触发抗重放
+        scope.launch {
+            val app = context.applicationContext as MyMesagApp
+            app.syncRequestHandler.doneEvents.collect { done -> handleSyncDone(done) }
         }
         // 重连触发补全请求 + 重试；再次断线则取消重试
         scope.launch {
@@ -123,11 +126,7 @@ class NotificationReceiver(
             return
         }
         val myId = deviceIdentity.deviceId()
-        // 多设备：只处理发给本机的信封
-        if (envelope.recipientDeviceId != null && envelope.recipientDeviceId != myId) {
-            return
-        }
-        val plaintext = CryptoManager.decrypt(envelope) ?: return
+        val plaintext = CryptoManager.decrypt(envelope, MqttTopics.CH_NOTIFY) ?: return
         val event = try {
             json.decodeFromString(NotificationEvent.serializer(), plaintext)
         } catch (e: Exception) {
@@ -156,7 +155,8 @@ class NotificationReceiver(
             val totalNotifications = groups.values.sumOf { it.size }
             NotificationBadgeHelper.setBadge(context, totalNotifications)
 
-            Log.d(TAG, "removed group key=$key title=${event.title} text=${event.text} badge=$totalNotifications")
+            if (BuildConfig.DEBUG) Log.d(TAG, "removed group key=$key title=${event.title} text=${event.text} badge=$totalNotifications")
+            else Log.d(TAG, "removed group key=$key badge=$totalNotifications")
             return
         }
         rebuild(event)
@@ -196,16 +196,17 @@ class NotificationReceiver(
             event.appName
         }
         // 多机配对时，用发送端的自定义设备标签区分来源
-        val titleText = deviceTagPrefix(event) + baseTitle
+        val titleText = timePrefix(event) + deviceTagPrefix(event) + baseTitle
 
         // 大图标：本地取源应用图标；源应用未安装则回退 MyMesag 默认图标
-        val largeIcon = NotificationIconFactory.sourceIcon(context, event.pkg)
+        val largeIcon = NotificationIconFactory.sourceIcon(context, event.pkg, event.isCall)
             ?: NotificationIconFactory.defaultIcon(context)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setContentTitle(titleText)
             .setContentText(if (lines.size > 1) "${lines.size}条新消息 · ${lines.last()}" else lines.last())
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setAutoCancel(true)
             .setContentIntent(buildContentIntent(event))
             .setGroup("mymesag_${event.pkg}") // 原生分组
@@ -241,7 +242,8 @@ class NotificationReceiver(
             val totalNotifications = groups.values.sumOf { it.size }
             NotificationBadgeHelper.setBadge(context, totalNotifications)
 
-            Log.d(TAG, "rebuilt pkg=${event.pkg} contact=$contact lines=${lines.size} group=${parsed.isGroup} badge=$totalNotifications")
+            if (BuildConfig.DEBUG) Log.d(TAG, "rebuilt pkg=${event.pkg} contact=$contact lines=${lines.size} group=${parsed.isGroup} badge=$totalNotifications")
+            else Log.d(TAG, "rebuilt pkg=${event.pkg} lines=${lines.size} group=${parsed.isGroup} badge=$totalNotifications")
         } catch (e: SecurityException) {
             Log.w(TAG, "POST_NOTIFICATIONS not granted", e)
         }
@@ -284,6 +286,7 @@ class NotificationReceiver(
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setContentTitle(event.appName)
             .setContentText("${groupNotificationCount}个对话的新消息")
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setGroup(groupKey)
             .setGroupSummary(true)
             .setAutoCancel(true)
@@ -305,6 +308,10 @@ class NotificationReceiver(
     }
 
     /** 多机配对时，用发送端设备标签作前缀区分来源；单机或无标签则返回空串。 */
+    /** 标题前置远端实际收到消息的时间：用发送端 ts，按本机时区与系统 12/24 小时制显示。 */
+    private fun timePrefix(event: NotificationEvent): String =
+        DateFormat.getTimeFormat(context).format(Date(event.ts)) + " · "
+
     private suspend fun deviceTagPrefix(event: NotificationEvent): String {
         if (event.deviceTag.isBlank()) return ""
         val app = context.applicationContext as MyMesagApp
@@ -329,7 +336,7 @@ class NotificationReceiver(
         )
     }
 
-    private fun isCallApp(pkg: String): Boolean = pkg in CALL_APP_PACKAGES
+    private fun isCallApp(pkg: String): Boolean = pkg in NotificationIconFactory.CALL_APP_PKGS
 
     /** 从通知的联系人/标题/正文里尽力提取电话号码（用于预填拨号器）；提不到返回 null。 */
     private fun extractPhoneNumber(event: NotificationEvent): String? {
@@ -411,14 +418,14 @@ class NotificationReceiver(
             ts = System.currentTimeMillis(), seq = System.currentTimeMillis(),
             replyToId = replyToId, pkg = pkg, text = text
         )
-        val env = CryptoManager.encrypt(json.encodeToString(ReplyEvent.serializer(), ev), myId, target)
+        val env = CryptoManager.encrypt(json.encodeToString(ReplyEvent.serializer(), ev), myId, target, MqttTopics.CH_REPLY)
         if (env == null) {
             postReplyStatus(event, notifId, original, "✗ 缺少会话密钥，请重新配对后再回复", allowReply = true)
             return
         }
         pendingInlineReplies[replyId] = PendingReply(notifId, event, original)
         postReplyStatus(event, notifId, original, "回复发送中，等待对方回执…", allowReply = false)
-        manager.publish(MqttTopics.reply(groupToken, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        manager.publish(MqttTopics.reply(groupToken), json.encodeToString(EncryptedEnvelope.serializer(), env))
         scope.launch {
             delay(ACK_TIMEOUT_MS)
             val p = pendingInlineReplies.remove(replyId) ?: return@launch
@@ -442,12 +449,12 @@ class NotificationReceiver(
             id = UUID.randomUUID().toString(), from = myId, to = target,
             ts = System.currentTimeMillis(), replyToId = replyToId, pkg = pkg
         )
-        val env = CryptoManager.encrypt(json.encodeToString(MarkReadEvent.serializer(), ev), myId, target)
+        val env = CryptoManager.encrypt(json.encodeToString(MarkReadEvent.serializer(), ev), myId, target, MqttTopics.CH_MARKREAD)
         if (env == null) {
             toast("缺少会话密钥，请重新配对后再试")
             return
         }
-        manager.publish(MqttTopics.markRead(groupToken, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        manager.publish(MqttTopics.markRead(groupToken), json.encodeToString(EncryptedEnvelope.serializer(), env))
         // 按需求：点击后直接撤下该通知，不再跳转应用二次确认
         dismissNotification(notifId, event)
         Log.d(TAG, "inline markread sent replyToId=$replyToId pkg=$pkg")
@@ -473,8 +480,8 @@ class NotificationReceiver(
         } else {
             event.appName
         }
-        val titleText = deviceTagPrefix(event) + baseTitle
-        val largeIcon = NotificationIconFactory.sourceIcon(context, event.pkg)
+        val titleText = timePrefix(event) + deviceTagPrefix(event) + baseTitle
+        val largeIcon = NotificationIconFactory.sourceIcon(context, event.pkg, event.isCall)
             ?: NotificationIconFactory.defaultIcon(context)
         val body = if (original.isNotBlank()) "$original\n$status" else status
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -482,6 +489,7 @@ class NotificationReceiver(
             .setContentTitle(titleText)
             .setContentText(status)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setAutoCancel(true)
             .setContentIntent(buildContentIntent(event))
             .setGroup("mymesag_${event.pkg}")
@@ -589,21 +597,12 @@ class NotificationReceiver(
             sinceTs = since
         )
         val plain = json.encodeToString(SyncRequestEvent.serializer(), req)
-        val env = CryptoManager.encrypt(plain, myId, target) ?: return
-        manager.publish(MqttTopics.syncReq(groupToken, target), json.encodeToString(EncryptedEnvelope.serializer(), env))
+        val env = CryptoManager.encrypt(plain, myId, target, MqttTopics.CH_SYNCREQ) ?: return
+        manager.publish(MqttTopics.syncReq(groupToken), json.encodeToString(EncryptedEnvelope.serializer(), env))
         Log.d(TAG, "sync request sent to=$target sinceTs=$since")
     }
 
-    private suspend fun handleSyncDone(payload: String) {
-        val envelope = runCatching {
-            json.decodeFromString(EncryptedEnvelope.serializer(), payload)
-        }.getOrNull() ?: return
-        val plaintext = CryptoManager.decrypt(envelope) ?: return
-        // syncreq 通道双向：A 只处理完成信号；请求缺少 replayed/upToTs，解码为 done 会失败而被忽略
-        val done = runCatching {
-            json.decodeFromString(SyncDoneEvent.serializer(), plaintext)
-        }.getOrNull() ?: return
-        if (done.type != "syncdone") return
+    private suspend fun handleSyncDone(done: SyncDoneEvent) {
         val myId = deviceIdentity.deviceId()
         if (done.to != myId) return
         pendingRecovery[done.from] = false
@@ -630,19 +629,5 @@ class NotificationReceiver(
         private const val EXTRA_EVENT = "extra_event"
         private const val EXTRA_ORIGINAL = "extra_original"
         private const val KEY_REPLY_TEXT = "inline_reply_text"
-
-        /** 来电/拨号/联系人类应用包名兜底列表（主判据为通知类别 CATEGORY_CALL）：点击跳回本机拨号器并预填号码。 */
-        private val CALL_APP_PACKAGES = setOf(
-            // AOSP / 小米 / OPPO / vivo
-            "com.android.incallui", "com.android.dialer", "com.android.phone",
-            "com.android.server.telecom", "com.android.contacts",
-            // 谷歌（Pixel 及海外多数机型的 Google Dialer）
-            "com.google.android.dialer", "com.google.android.contacts",
-            // 三星 OneUI
-            "com.samsung.android.dialer", "com.samsung.android.incallui",
-            "com.samsung.android.app.telephoneui", "com.samsung.android.contacts",
-            // 华为 / 荣耀（拨号集成在联系人）
-            "com.huawei.contacts", "com.hihonor.contacts", "com.hihonor.incallui"
-        )
     }
 }

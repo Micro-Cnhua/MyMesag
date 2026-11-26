@@ -74,7 +74,11 @@ class MqttViewModel(application: Application) : AndroidViewModel(application) {
         val ca = caCertPem.trim().ifBlank { null }
         _log.add(0, "→ 连接 $broker")
         viewModelScope.launch {
-            app.mqttConfigStore.save(broker, cid, user, pass, ca, tag)
+            val saved = runCatching { app.mqttConfigStore.save(broker, cid, user, pass, ca, tag) }.isSuccess
+            if (!saved) {
+                Toast.makeText(app, "本机安全存储不可用，配置未保存，请检查系统密钥库后重试", Toast.LENGTH_LONG).show()
+                return@launch
+            }
             val keepAlive = app.mqttConfigStore.savedKeepAlive()
             manager.connect(
                 MqttConfig(

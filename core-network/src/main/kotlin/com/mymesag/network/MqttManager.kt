@@ -102,7 +102,8 @@ class MqttManager(private val scope: CoroutineScope) {
 
         override fun messageArrived(topic: String, message: MqttMessage) {
             val text = String(message.payload, Charsets.UTF_8)
-            Log.d(TAG, "messageArrived topic=$topic payload=$text")
+            if (BuildConfig.DEBUG) Log.d(TAG, "messageArrived topic=$topic payload=$text")
+            else Log.d(TAG, "messageArrived topic=$topic bytes=${text.length}")
             scope.launch {
                 _messages.emit(ReceivedMessage(topic, text, message.qos, message.isRetained))
             }
@@ -185,7 +186,8 @@ class MqttManager(private val scope: CoroutineScope) {
     fun publish(topic: String, payload: String, qos: Int = 1, retained: Boolean = false) {
         val c = client ?: return
         if (!c.isConnected) return
-        Log.d(TAG, "publish topic=$topic payload=$payload")
+        if (BuildConfig.DEBUG) Log.d(TAG, "publish topic=$topic payload=$payload")
+        else Log.d(TAG, "publish topic=$topic bytes=${payload.length}")
         val message = MqttMessage(payload.toByteArray(Charsets.UTF_8)).apply {
             this.qos = qos
             isRetained = retained

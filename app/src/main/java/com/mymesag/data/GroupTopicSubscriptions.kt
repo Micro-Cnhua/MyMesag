@@ -12,12 +12,12 @@ import kotlinx.coroutines.launch
  * 本函数 collect [DeviceIdentity.groupTokenFlow]：每次变化就退订旧主题、以新主题重订，
  * 启动时先播种一次。groupToken 为 null（未配对）时退订且不订阅。
  *
- * @param wildcardOf 由 groupToken 构造该处理器的通配订阅主题，如 { MqttTopics.replyWildcard(it) }。
+ * @param topicOf 由 groupToken 构造该处理器的订阅主题，如 { MqttTopics.reply(it) }。
  */
 fun CoroutineScope.followGroupTopicSubscription(
     deviceIdentity: DeviceIdentity,
     manager: MqttManager,
-    wildcardOf: (String) -> String,
+    topicOf: (String) -> String,
     tag: String
 ) {
     launch {
@@ -28,7 +28,7 @@ fun CoroutineScope.followGroupTopicSubscription(
         }
         var current: String? = null
         deviceIdentity.groupTokenFlow.collect { token ->
-            val target = token?.let(wildcardOf)
+            val target = token?.let(topicOf)
             if (target == current) return@collect
             try {
                 current?.let { manager.unsubscribe(it) }

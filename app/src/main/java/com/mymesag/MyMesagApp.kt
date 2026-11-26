@@ -106,17 +106,17 @@ class MyMesagApp : Application() {
                 sessionKeysLoaded.complete(Unit)
             }
         }
-        // B 端通知还原：订阅 notify/{token}/+ 并处理收到的通知事件
+        // B 端通知还原：订阅 notify/{token} 并处理收到的通知事件
         notificationReceiver.start()
-        // B 端补发响应：订阅 syncreq/{token}/+，响应接收端重连后的补全请求
+        // B 端补发响应：订阅 syncreq/{token}，响应接收端重连后的补全请求
         syncRequestHandler.start()
-        // A 端回复处理：订阅 reply/{token}/+ 并执行回复、回传 ack
+        // A 端回复处理：订阅 reply/{token} 并执行回复、回传 ack
         ReplyHandler(this, MqttConnection.manager, deviceIdentity, replyActionCache).start()
-        // B 端回执接收：订阅 ack/{token}/+，把真实原因码交给回复界面
+        // B 端回执接收：订阅 ack/{token}，把真实原因码交给回复界面
         replyAckReceiver.start()
-        // A 端远程标记已读：订阅 markread/{token}/+，触发源应用「标记已读」动作并回 ack
+        // A 端远程标记已读：订阅 markread/{token}，触发源应用「标记已读」动作并回 ack
         markReadHandler.start()
-        // B 端来电显示：订阅 call/{token}/+
+        // B 端来电显示：订阅 call/{token}
         CallReceiver(this, MqttConnection.manager, deviceIdentity).start()
         // A 端来电监听：监听通话状态并发布 CallEvent
         CallListener(this, MqttConnection.manager, deviceIdentity).start()

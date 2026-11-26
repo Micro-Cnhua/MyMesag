@@ -6,6 +6,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.util.LruCache
+import com.mymesag.BuildConfig
 import com.mymesag.MyMesagApp
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.MqttConnection
@@ -212,12 +213,12 @@ class NotifyListenerService : NotificationListenerService() {
     private suspend fun publishEvent(event: NotificationEvent) {
         val groupToken = app.deviceIdentity.groupToken() ?: return
         val deviceId = app.deviceIdentity.deviceId()
-        val topic = MqttTopics.notify(groupToken, deviceId)
+        val topic = MqttTopics.notify(groupToken)
         val plaintext = json.encodeToString(NotificationEvent.serializer(), event)
-        // 多设备两两密钥：按每个接收方分别加密，接收方凭 recipientDeviceId 过滤
+        // 多设备两两密钥：按每个接收方分别加密，只有目标设备能解开
         var published = false
         for (peerId in app.pairingManager.pairedDeviceIds()) {
-            val envelope = CryptoManager.encrypt(plaintext, deviceId, peerId) ?: continue
+            val envelope = CryptoManager.encrypt(plaintext, deviceId, peerId, MqttTopics.CH_NOTIFY) ?: continue
             val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
             MqttConnection.manager.publish(topic, payload)
             published = true
@@ -393,7 +394,8 @@ class NotifyListenerService : NotificationListenerService() {
                     contact = contact
                 )
                 publishEvent(event)
-                Log.d(TAG, "removed event published pkg=$pkg title=$title text=$text")
+                if (BuildConfig.DEBUG) Log.d(TAG, "removed event published pkg=$pkg title=$title text=$text")
+                else Log.d(TAG, "removed event published pkg=$pkg")
             } catch (e: Exception) {
                 Log.e(TAG, "onNotificationRemoved error", e)
             }

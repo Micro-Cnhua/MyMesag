@@ -23,7 +23,7 @@ import java.util.UUID
 
 /**
  * A 端回复处理（阶段 4 / 项目书 9.3）：
- * 订阅 reply/{token}/+ → 找到 RemoteInput Action → 执行回复 → 回传 ack（原因码，表 9）。
+ * 订阅 reply/{token} → 找到 RemoteInput Action → 执行回复 → 回传 ack（原因码，表 9）。
  */
 class ReplyHandler(
     private val context: Context,
@@ -35,7 +35,7 @@ class ReplyHandler(
     private val json = Json { encodeDefaults = true }
 
     fun start() {
-        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.replyWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.reply(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("reply/")) handleReply(msg.payload)
@@ -50,7 +50,7 @@ class ReplyHandler(
             Log.e(TAG, "decode envelope error: ${e.message}")
             return
         }
-        val plaintext = CryptoManager.decrypt(envelope) ?: run {
+        val plaintext = CryptoManager.decrypt(envelope, MqttTopics.CH_REPLY) ?: run {
             Log.w(TAG, "decrypt failed for reply")
             return
         }
@@ -122,9 +122,9 @@ class ReplyHandler(
             replyId = event.id
         )
         val payload = json.encodeToString(AckEvent.serializer(), ack)
-        val envelope = CryptoManager.encrypt(payload, myId, event.from) ?: return
+        val envelope = CryptoManager.encrypt(payload, myId, event.from, MqttTopics.CH_ACK) ?: return
         manager.publish(
-            MqttTopics.ack(groupToken, event.from),
+            MqttTopics.ack(groupToken),
             json.encodeToString(EncryptedEnvelope.serializer(), envelope)
         )
         Log.d(TAG, "ack reason=$reason to=${event.from}")

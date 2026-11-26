@@ -2,14 +2,10 @@ package com.mymesag.model
 
 import kotlinx.serialization.Serializable
 
-/** 加密封装格式（项目书 6.4 + 多设备 recipient）。外层只保留路由与抗重放所需的明文元数据。 */
+/** 加密封装 v2：外层只剩版本号与密文，设备标识与序号全部收进密文（见 [SealedPayload]）。 */
 @Serializable
 data class EncryptedEnvelope(
-    val v: Int = 1,
-    val senderDeviceId: String,
-    val recipientDeviceId: String? = null,
-    val seq: Long,
-    val ts: Long,
+    val v: Int = 2,
     val iv: String,
     val cipher: String
 )

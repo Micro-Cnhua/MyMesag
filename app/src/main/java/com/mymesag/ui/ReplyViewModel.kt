@@ -86,7 +86,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
                 text = text
             )
             val plaintext = json.encodeToString(ReplyEvent.serializer(), event)
-            val envelope = CryptoManager.encrypt(plaintext, deviceId, targetDeviceId)
+            val envelope = CryptoManager.encrypt(plaintext, deviceId, targetDeviceId, MqttTopics.CH_REPLY)
             if (envelope == null) {
                 Log.w(TAG, "no session key for $targetDeviceId, cannot encrypt reply")
                 _state.value = ReplyUiState.Failed("NO_KEY", "本机缺少与对方的会话密钥，请重新配对后再回复")
@@ -97,7 +97,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
             pendingTarget = targetDeviceId
             _state.value = ReplyUiState.Sending
             val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
-            MqttConnection.manager.publish(MqttTopics.reply(groupToken, targetDeviceId), payload)
+            MqttConnection.manager.publish(MqttTopics.reply(groupToken), payload)
             timeoutJob?.cancel()
             timeoutJob = viewModelScope.launch {
                 delay(ACK_TIMEOUT_MS)
@@ -132,7 +132,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
                 pkg = pkg
             )
             val plaintext = json.encodeToString(MarkReadEvent.serializer(), event)
-            val envelope = CryptoManager.encrypt(plaintext, deviceId, targetDeviceId)
+            val envelope = CryptoManager.encrypt(plaintext, deviceId, targetDeviceId, MqttTopics.CH_MARKREAD)
             if (envelope == null) {
                 Log.w(TAG, "no session key for $targetDeviceId, cannot encrypt markread")
                 _state.value = ReplyUiState.Failed("NO_KEY", "本机缺少与对方的会话密钥，请重新配对后再试")
@@ -143,7 +143,7 @@ class ReplyViewModel(application: Application) : AndroidViewModel(application) {
             pendingTarget = targetDeviceId
             _state.value = ReplyUiState.Sending
             val payload = json.encodeToString(EncryptedEnvelope.serializer(), envelope)
-            MqttConnection.manager.publish(MqttTopics.markRead(groupToken, targetDeviceId), payload)
+            MqttConnection.manager.publish(MqttTopics.markRead(groupToken), payload)
             timeoutJob?.cancel()
             timeoutJob = viewModelScope.launch {
                 delay(ACK_TIMEOUT_MS)

@@ -16,14 +16,19 @@ import com.mymesag.network.MqttTopics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
 /**
- * B 端补发响应：订阅 syncreq/{token}/+ → 解密请求 → 从已发送内容缓存重放 ts>sinceTs 的通知
- * （只加密给请求方，publish 到 notify 主题，复用 A 端现有接收）→ 必发 SyncDone 让 A 停止重试。
+ * B 端补发响应：独占订阅 syncreq/{token} → 解密一次后分流：
+ * 请求则从已发送内容缓存重放 ts>sinceTs 的通知（只加密给请求方，publish 到 notify 主题）并必发 SyncDone；
+ * 完成信号则通过 [doneEvents] 交给 A 端接收逻辑，避免同一信封被解密两次而触发抗重放误判。
  */
 class SyncRequestHandler(
     private val context: Context,
@@ -34,8 +39,14 @@ class SyncRequestHandler(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    private val _done = MutableSharedFlow<SyncDoneEvent>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val doneEvents: SharedFlow<SyncDoneEvent> = _done.asSharedFlow()
+
     fun start() {
-        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.syncReqWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.syncReq(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("syncreq/")) handle(msg.payload)
@@ -44,16 +55,26 @@ class SyncRequestHandler(
     }
 
     private suspend fun handle(payload: String) {
-        val app = context.applicationContext as MyMesagApp
         val envelope = runCatching {
             json.decodeFromString(EncryptedEnvelope.serializer(), payload)
         }.getOrNull() ?: return
-        val plaintext = CryptoManager.decrypt(envelope) ?: return
-        // syncreq 通道双向：B 只处理请求；SyncDone 缺少 sinceTs，解码为请求会失败而被忽略
+        val plaintext = CryptoManager.decrypt(envelope, MqttTopics.CH_SYNCREQ) ?: return
+        // 请求与完成信号靠各自独有的必填字段区分，只解密一次
         val req = runCatching {
             json.decodeFromString(SyncRequestEvent.serializer(), plaintext)
-        }.getOrNull() ?: return
-        if (req.type != "syncreq") return
+        }.getOrNull()
+        if (req != null && req.type == "syncreq") {
+            handleRequest(req)
+            return
+        }
+        val done = runCatching {
+            json.decodeFromString(SyncDoneEvent.serializer(), plaintext)
+        }.getOrNull()
+        if (done != null && done.type == "syncdone") _done.tryEmit(done)
+    }
+
+    private suspend fun handleRequest(req: SyncRequestEvent) {
+        val app = context.applicationContext as MyMesagApp
         val myId = deviceIdentity.deviceId()
         if (req.to != myId) return
         if (!app.appFilterRepository.syncSendEnabled.first()) {
@@ -63,11 +84,11 @@ class SyncRequestHandler(
 
         val groupToken = deviceIdentity.groupToken() ?: return
         val events = cache.replaySince(req.sinceTs, REPLAY_LIMIT)
-        val notifyTopic = MqttTopics.notify(groupToken, myId)
+        val notifyTopic = MqttTopics.notify(groupToken)
         var upToTs = req.sinceTs
         for (e in events) {
             val plain = json.encodeToString(NotificationEvent.serializer(), e)
-            val env = CryptoManager.encrypt(plain, myId, req.from) ?: continue
+            val env = CryptoManager.encrypt(plain, myId, req.from, MqttTopics.CH_NOTIFY) ?: continue
             manager.publish(notifyTopic, json.encodeToString(EncryptedEnvelope.serializer(), env))
             if (e.ts > upToTs) upToTs = e.ts
         }
@@ -82,9 +103,9 @@ class SyncRequestHandler(
             upToTs = upToTs
         )
         val donePlain = json.encodeToString(SyncDoneEvent.serializer(), done)
-        val doneEnv = CryptoManager.encrypt(donePlain, myId, req.from) ?: return
+        val doneEnv = CryptoManager.encrypt(donePlain, myId, req.from, MqttTopics.CH_SYNCREQ) ?: return
         manager.publish(
-            MqttTopics.syncReq(groupToken, req.from),
+            MqttTopics.syncReq(groupToken),
             json.encodeToString(EncryptedEnvelope.serializer(), doneEnv)
         )
         Log.d(TAG, "sync replay done to=${req.from} count=${events.size} upToTs=$upToTs")

@@ -143,6 +143,13 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "请勿轻易泄露配对二维码，二维码包含重要配对信息！",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
@@ -182,6 +189,12 @@ fun PairScreen(onBack: () -> Unit, viewModel: PairingViewModel = viewModel()) {
                         Icon(AppIcons.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
                         Text("  从相册选择二维码图片")
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "如使用图片扫码配对，请在配对成功后将带有配对二维码的截图完全删除，以防止信息泄露！",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
 

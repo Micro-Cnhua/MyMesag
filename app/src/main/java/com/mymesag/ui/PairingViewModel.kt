@@ -26,7 +26,10 @@ class PairingViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            val payload = manager.buildPayload()
+            val payload = runCatching { manager.buildPayload() }.getOrElse {
+                status = "本机安全存储不可用，无法生成配对二维码：${it.javaClass.simpleName}"
+                return@launch
+            }
             myQrContent = manager.encodePayload(payload)
             myFingerprint = payload.fingerprint
             pairedDevices = manager.pairedDevices()
@@ -55,7 +58,10 @@ class PairingViewModel(application: Application) : AndroidViewModel(application)
     fun confirmPairing() {
         val peer = peerPayload ?: return
         viewModelScope.launch {
-            val result = manager.completePairing(peer)
+            val result = runCatching { manager.completePairing(peer) }.getOrElse {
+                status = "配对失败：本机安全存储不可用（${it.javaClass.simpleName}）"
+                return@launch
+            }
             if (result.success) {
                 paired = true
                 pairedDevices = manager.pairedDevices()
@@ -68,9 +74,9 @@ class PairingViewModel(application: Application) : AndroidViewModel(application)
 
     fun removeDevice(deviceId: String) {
         viewModelScope.launch {
-            manager.removeDevice(deviceId)
+            val ok = runCatching { manager.removeDevice(deviceId) }.isSuccess
             pairedDevices = manager.pairedDevices()
-            status = "已移除设备并轮换密钥"
+            status = if (ok) "已移除设备并轮换密钥" else "移除失败：本机安全存储不可用，密钥未能轮换"
         }
     }
 

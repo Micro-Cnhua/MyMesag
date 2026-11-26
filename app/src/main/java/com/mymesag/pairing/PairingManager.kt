@@ -36,30 +36,21 @@ class PairingManager(
         val priv = prefs[KEY_PRIVATE]
         val pub = prefs[KEY_PUBLIC]
         if (priv != null && pub != null) {
-            val privPlain = secure.decryptOrPlaintext(priv)
-            if (privPlain == null) {
-                // 解密失败（Keystore 失效），重新生成密钥对
-                Log.e(TAG, "private key decryption failed, regenerating keypair")
-                dataStore.edit {
-                    it.remove(KEY_PRIVATE)
-                    it.remove(KEY_PUBLIC)
-                    it.remove(KEY_PEERS)
-                }
-                CryptoManager.clearKeys()
-            } else {
-                if (privPlain == priv) {
-                    // 旧明文，迁移为加密（失败不阻断读取）
-                    try {
-                        dataStore.edit { it[KEY_PRIVATE] = secure.encrypt(privPlain) }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "migrate private key failed: ${e.message}")
-                    }
-                }
+            val privPlain = secure.decryptOrNull(priv)
+            if (privPlain != null) {
                 return SessionKeys.KeyPair(
                     Base64.decode(privPlain, Base64.NO_WRAP),
                     Base64.decode(pub, Base64.NO_WRAP)
                 )
             }
+            // 解密失败（Keystore 失效），重新生成密钥对
+            Log.e(TAG, "private key decryption failed, regenerating keypair")
+            dataStore.edit {
+                it.remove(KEY_PRIVATE)
+                it.remove(KEY_PUBLIC)
+                it.remove(KEY_PEERS)
+            }
+            CryptoManager.clearKeys()
         }
         val kp = SessionKeys.generateKeyPair()
         dataStore.edit {
@@ -163,20 +154,12 @@ class PairingManager(
 
     private suspend fun loadPeers(): List<PeerRecord> {
         val s = dataStore.data.first()[KEY_PEERS] ?: return emptyList()
-        val decrypted = secure.decryptOrPlaintext(s)
+        val decrypted = secure.decryptOrNull(s)
         if (decrypted == null) {
             // 解密失败（Keystore 失效），清空配对数据
             Log.e(TAG, "peers decryption failed, clearing peers")
             dataStore.edit { it.remove(KEY_PEERS) }
             return emptyList()
-        }
-        if (decrypted == s) {
-            // 旧明文，迁移为加密（失败不阻断读取）
-            try {
-                dataStore.edit { it[KEY_PEERS] = secure.encrypt(decrypted) }
-            } catch (e: Exception) {
-                Log.w(TAG, "migrate peers failed: ${e.message}")
-            }
         }
         return runCatching { json.decodeFromString(ListSerializer(PeerRecord.serializer()), decrypted) }.getOrDefault(emptyList())
     }

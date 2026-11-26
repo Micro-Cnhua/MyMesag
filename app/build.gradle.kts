@@ -25,8 +25,8 @@ android {
         applicationId = "com.mymesag"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.3.3-beta1"
+        versionCode = 11
+        versionName = "0.3.3-beta5"
     }
 
     signingConfigs {
@@ -59,6 +59,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     applicationVariants.all {

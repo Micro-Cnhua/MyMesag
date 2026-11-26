@@ -4,18 +4,22 @@ import android.util.Log
 import com.mymesag.crypto.CryptoBox
 import com.mymesag.crypto.SeqWindow
 import com.mymesag.model.EncryptedEnvelope
+import com.mymesag.model.SealedPayload
+import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 进程级加密管理器（阶段 7/8/9）：多设备两两会话密钥 + 序号 + 加密/解密 + 抗重放。
- * 密钥按 peer deviceId 存储；加密用「接收方」密钥，解密按「发送方」查密钥。
+ * 密钥按 peer deviceId 存储；加密用「接收方」密钥。外层信封不含设备标识，
+ * 解密时逐个已配对密钥试解，成功后再按密文内的发送方做抗重放。
  */
 object CryptoManager {
 
     private val box = CryptoBox()
     private val seqWindow = SeqWindow()
     private val seq = AtomicLong(System.currentTimeMillis() / 1000)
+    private val json = Json { encodeDefaults = true }
 
     private val keys = ConcurrentHashMap<String, ByteArray>()
 
@@ -33,28 +37,47 @@ object CryptoManager {
         keys.clear()
     }
 
-    /** 用接收方密钥加密；无该接收方密钥时返回 null。 */
-    fun encrypt(plaintext: String, senderDeviceId: String, recipientDeviceId: String): EncryptedEnvelope? {
+    /** 用接收方密钥加密；发送方与序号封进密文，channel 写入 AAD。无该接收方密钥时返回 null。 */
+    fun encrypt(
+        plaintext: String,
+        senderDeviceId: String,
+        recipientDeviceId: String,
+        channel: String
+    ): EncryptedEnvelope? {
         val key = keys[recipientDeviceId] ?: return null
-        return box.encrypt(plaintext, senderDeviceId, seq.incrementAndGet(), System.currentTimeMillis(), key, recipientDeviceId)
+        val sealed = json.encodeToString(
+            SealedPayload.serializer(),
+            SealedPayload(senderDeviceId, seq.incrementAndGet(), plaintext)
+        )
+        return box.encrypt(sealed, key, channel)
     }
 
-    /** 解密并做抗重放校验；失败（篡改 / 重放 / 无密钥）返回 null。 */
-    fun decrypt(envelope: EncryptedEnvelope): String? {
-        if (!seqWindow.checkAndMark(envelope.senderDeviceId, envelope.seq)) {
-            Log.w(TAG, "replay rejected sender=${envelope.senderDeviceId} seq=${envelope.seq}")
+    /**
+     * 逐个已配对密钥试解密，成功后按密文内的发送方做抗重放；channel 须为消息实际到达的通道。
+     * 失败（篡改 / 重放 / 跨通道 / 非本组消息）返回 null。
+     */
+    fun decrypt(envelope: EncryptedEnvelope, channel: String): String? {
+        if (keys.isEmpty()) {
+            Log.w(TAG, "no paired session key, cannot decrypt")
             return null
         }
-        val key = keys[envelope.senderDeviceId] ?: run {
-            Log.w(TAG, "no key for sender=${envelope.senderDeviceId}")
-            return null
+        for (key in keys.values) {
+            val sealedJson = try {
+                box.decrypt(envelope, key, channel)
+            } catch (e: Exception) {
+                continue
+            }
+            val sealed = runCatching {
+                json.decodeFromString(SealedPayload.serializer(), sealedJson)
+            }.getOrNull() ?: continue
+            if (!seqWindow.checkAndMark(sealed.sender, sealed.seq)) {
+                Log.w(TAG, "replay rejected sender=${sealed.sender} seq=${sealed.seq}")
+                return null
+            }
+            return sealed.body
         }
-        return try {
-            box.decrypt(envelope, key)
-        } catch (e: Exception) {
-            Log.w(TAG, "decrypt failed (tampered?): ${e.message}")
-            null
-        }
+        Log.w(TAG, "decrypt failed: no matching peer key (tampered, wrong channel or not for this group)")
+        return null
     }
 
     private const val TAG = "CryptoManager"

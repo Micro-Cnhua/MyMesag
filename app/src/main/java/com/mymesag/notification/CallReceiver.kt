@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.mymesag.BuildConfig
 import com.mymesag.R
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
@@ -24,7 +25,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * B 端来电显示（阶段 5 / 项目书 10.2）：
- * 订阅 call/{token}/+ → 显示「来电」通知（不提供任何接听/挂断按钮，号码为空时降级文案）。
+ * 订阅 call/{token} → 显示「来电」通知（不提供任何接听/挂断按钮，号码为空时降级文案）。
  */
 class CallReceiver(
     private val context: Context,
@@ -35,7 +36,7 @@ class CallReceiver(
     private val json = Json { ignoreUnknownKeys = true }
 
     fun start() {
-        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.callWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.call(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("call/")) handleCall(msg.payload)
@@ -51,11 +52,7 @@ class CallReceiver(
             return
         }
         val myId = deviceIdentity.deviceId()
-        // 多设备：只处理发给本机的信封
-        if (envelope.recipientDeviceId != null && envelope.recipientDeviceId != myId) {
-            return
-        }
-        val plaintext = CryptoManager.decrypt(envelope) ?: return
+        val plaintext = CryptoManager.decrypt(envelope, MqttTopics.CH_CALL) ?: return
         val event = try {
             json.decodeFromString(CallEvent.serializer(), plaintext)
         } catch (e: Exception) {
@@ -93,12 +90,13 @@ class CallReceiver(
             .setSmallIcon(R.drawable.ic_call)
             .setContentTitle("来电")
             .setContentText(content)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setAutoCancel(true)
             .setContentIntent(buildDialIntent(event))
             .build()
         try {
             nm.notify(CALL_TAG, event.id.hashCode(), notification)
-            Log.d(TAG, "call notification number=${event.number} contact=${event.contactName}")
+            if (BuildConfig.DEBUG) Log.d(TAG, "call notification number=${event.number} contact=${event.contactName}")
         } catch (e: SecurityException) {
             Log.w(TAG, "notification denied", e)
         }

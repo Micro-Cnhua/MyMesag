@@ -18,19 +18,15 @@ class SecureStorage {
 
     private val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
-    fun encrypt(plaintext: String): String = try {
+    /** Keystore 不可用时直接抛出：私钥/密码绝不降级为明文落盘，由调用方提示用户。 */
+    fun encrypt(plaintext: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-        val combined = cipher.iv + ciphertext
-        Base64.encodeToString(combined, Base64.NO_WRAP)
-    } catch (e: Exception) {
-        // Keystore 不可用时降级为明文存储，保证功能可用
-        Log.e(TAG, "encrypt failed, fallback to plaintext: ${e.javaClass.simpleName}: ${e.message}")
-        plaintext
+        return Base64.encodeToString(cipher.iv + ciphertext, Base64.NO_WRAP)
     }
 
-    fun decrypt(encoded: String): String {
+    private fun decrypt(encoded: String): String {
         val combined = Base64.decode(encoded, Base64.NO_WRAP)
         val iv = combined.copyOfRange(0, IV_SIZE)
         val ciphertext = combined.copyOfRange(IV_SIZE, combined.size)
@@ -39,25 +35,12 @@ class SecureStorage {
         return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }
 
-    /**
-     * 兼容旧版明文数据：解密失败时返回 null（而非返回加密数据）。
-     * 调用方需处理 null 情况（通常是 Keystore 失效，需要重新配对/输入密码）。
-     */
-    fun decryptOrPlaintext(encoded: String): String? = try {
+    /** 解密失败一律返回 null（Keystore 失效或数据损坏），由调用方决定重置还是提示重新输入。 */
+    fun decryptOrNull(encoded: String): String? = try {
         decrypt(encoded)
     } catch (e: Exception) {
-        // 检查是否本身就是明文（旧版本数据）
-        // 加密数据格式：base64(IV + ciphertext)，长度至少 12 bytes IV + 16 bytes tag
-        val decoded = runCatching { Base64.decode(encoded, Base64.NO_WRAP) }.getOrNull()
-        if (decoded != null && decoded.size > 28) {
-            // 看起来像加密数据但解密失败 → Keystore 问题，返回 null
-            Log.e(TAG, "decrypt failed (Keystore issue?): ${e.javaClass.simpleName}: ${e.message}")
-            null
-        } else {
-            // 不是有效的加密数据格式 → 可能是旧版明文
-            Log.w(TAG, "treating as plaintext (legacy data)")
-            encoded
-        }
+        Log.e(TAG, "decrypt failed: ${e.javaClass.simpleName}: ${e.message}")
+        null
     }
 
     private fun getOrCreateKey(): SecretKey {

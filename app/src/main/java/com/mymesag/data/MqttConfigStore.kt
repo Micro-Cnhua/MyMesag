@@ -33,20 +33,11 @@ class MqttConfigStore(private val dataStore: DataStore<Preferences>, private val
 
     suspend fun savedPassword(): String? {
         val v = dataStore.data.first()[KEY_PASSWORD] ?: return null
-        val decoded = secure.decryptOrPlaintext(v)
+        val decoded = secure.decryptOrNull(v)
         if (decoded == null) {
             // 解密失败（Keystore 失效），需要重新输入密码
             android.util.Log.e("MqttConfigStore", "password decryption failed, clearing stored password")
             dataStore.edit { it.remove(KEY_PASSWORD) }
-            return null
-        }
-        if (decoded == v) {
-            // 旧明文，迁移为加密（失败不阻断读取）
-            try {
-                dataStore.edit { it[KEY_PASSWORD] = secure.encrypt(decoded) }
-            } catch (e: Exception) {
-                android.util.Log.w("MqttConfigStore", "migrate password failed: ${e.message}")
-            }
         }
         return decoded
     }

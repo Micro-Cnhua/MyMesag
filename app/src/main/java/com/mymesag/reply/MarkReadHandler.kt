@@ -19,7 +19,7 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 
 /**
- * A 端远程标记已读：订阅 markread/{token}/+ → 解密请求 → 触发缓存的源应用「标记已读」动作 → 回 ack。
+ * A 端远程标记已读：订阅 markread/{token} → 解密请求 → 触发缓存的源应用「标记已读」动作 → 回 ack。
  * 复用回复链路的 ReplyActionCache.getReadAction 与 ack 通道；动作失效/不存在时回相应原因码（尽力而为）。
  */
 class MarkReadHandler(
@@ -33,7 +33,7 @@ class MarkReadHandler(
     private val json = Json { encodeDefaults = true }
 
     fun start() {
-        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.markReadWildcard(it) }, TAG)
+        scope.followGroupTopicSubscription(deviceIdentity, manager, { MqttTopics.markRead(it) }, TAG)
         scope.launch {
             manager.messages.collect { msg ->
                 if (msg.topic.startsWith("markread/")) handle(msg.payload)
@@ -45,7 +45,7 @@ class MarkReadHandler(
         val envelope = runCatching {
             json.decodeFromString(EncryptedEnvelope.serializer(), payload)
         }.getOrNull() ?: return
-        val plaintext = CryptoManager.decrypt(envelope) ?: run {
+        val plaintext = CryptoManager.decrypt(envelope, MqttTopics.CH_MARKREAD) ?: run {
             Log.w(TAG, "decrypt failed for markread")
             return
         }
@@ -89,10 +89,10 @@ class MarkReadHandler(
             replyId = event.id
         )
         val envelope = CryptoManager.encrypt(
-            json.encodeToString(AckEvent.serializer(), ack), myId, event.from
+            json.encodeToString(AckEvent.serializer(), ack), myId, event.from, MqttTopics.CH_ACK
         ) ?: return
         manager.publish(
-            MqttTopics.ack(groupToken, event.from),
+            MqttTopics.ack(groupToken),
             json.encodeToString(EncryptedEnvelope.serializer(), envelope)
         )
         Log.d(TAG, "markread ack reason=$reason to=${event.from}")

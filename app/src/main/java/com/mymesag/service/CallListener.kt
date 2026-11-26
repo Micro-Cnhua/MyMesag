@@ -11,6 +11,7 @@ import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.mymesag.BuildConfig
 import com.mymesag.MyMesagApp
 import com.mymesag.data.CryptoManager
 import com.mymesag.data.DeviceIdentity
@@ -111,13 +112,14 @@ class CallListener(
             // 号码与联系人姓名属敏感信息：按每个已配对接收方分别加密，broker 只见密文
             val app = context.applicationContext as MyMesagApp
             for (peerId in app.pairingManager.pairedDeviceIds()) {
-                val envelope = CryptoManager.encrypt(payload, deviceId, peerId) ?: continue
+                val envelope = CryptoManager.encrypt(payload, deviceId, peerId, MqttTopics.CH_CALL) ?: continue
                 manager.publish(
-                    MqttTopics.call(groupToken, deviceId),
+                    MqttTopics.call(groupToken),
                     json.encodeToString(EncryptedEnvelope.serializer(), envelope)
                 )
             }
-            Log.d(TAG, "call event state=$state number=$number contact=$contactName")
+            if (BuildConfig.DEBUG) Log.d(TAG, "call event state=$state number=$number contact=$contactName")
+            else Log.d(TAG, "call event state=$state")
         }
     }
 
