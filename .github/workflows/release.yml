@@ -60,7 +60,7 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           if [ -f CHANGELOG.md ]; then
             awk -v tag="## $TAG" '
-              index($0, tag) == 1 { f = 1; next }
+              $0 == tag { f = 1; next }
               f && /^## / { exit }
               f { print }
             ' CHANGELOG.md > release_notes.md

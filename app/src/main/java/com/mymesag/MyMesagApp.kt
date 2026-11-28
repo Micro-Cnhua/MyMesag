@@ -92,6 +92,8 @@ class MyMesagApp : Application() {
         super.onCreate()
         Log.i(TAG, "MyMesagApp onCreate started")
         com.mymesag.ui.ThemeManager.init(this)
+        // 唤醒型心跳需要 Context：Doze 中按时发 PINGREQ，避免 broker 超时踢线
+        MqttConnection.manager.appContext = this
         // 升级到加密存储 + 加载会话密钥（阻塞直到完成，避免消息处理时密钥未加载）
         appScope.launch {
             try {

@@ -5,7 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -24,7 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * 前台服务（阶段 6）：常驻通知保活 + 自动连接 MQTT + 网络切换监听（网络恢复时主动重连）。
+ * 前台服务（阶段 6）：常驻通知保活 + 自动连接 MQTT + 网络切换监听 + 亮屏/解锁活性自检。
  * foregroundServiceType = remoteMessaging：无累计时长上限，避免 dataSync 的 6 小时/24 小时配额
  * 耗尽后服务被系统强停、且无法再次启动。
  */
@@ -36,6 +39,7 @@ class MqttForegroundService : Service() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, buildNotification())
         registerNetworkCallback()
+        registerScreenReceiver()
         // 注入免费的本地网络可用性判断：重连前先查 ConnectivityManager（不发起网络 I/O、不唤醒射频），
         // 网络不通则跳过试连。用 applicationContext 避免 lambda 持有 Service 实例。
         val appContext = applicationContext
@@ -51,6 +55,7 @@ class MqttForegroundService : Service() {
 
     override fun onDestroy() {
         unregisterNetworkCallback()
+        unregisterScreenReceiver()
         super.onDestroy()
     }
 
@@ -105,6 +110,38 @@ class MqttForegroundService : Service() {
         }
     }
 
+    /**
+     * 亮屏/解锁自愈。息屏期间 Wi-Fi 没有变化，网络回调不会触发；
+     * 而 Doze 后连接可能是半开的（isConnected 仍为 true），只靠网络回调永远等不到重连。
+     * 亮屏本身就是一次唤醒，这里顺带做活性自检，不增加息屏期间的耗电。
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Log.d(TAG, "screen wake (${intent.action}), check mqtt liveness")
+            MqttConnection.manager.ensureAlive()
+        }
+    }
+
+    private fun registerScreenReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        try {
+            registerReceiver(screenReceiver, filter)
+        } catch (e: Exception) {
+            Log.w(TAG, "register screen receiver failed", e)
+        }
+    }
+
+    private fun unregisterScreenReceiver() {
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "unregister screen receiver failed", e)
+        }
+    }
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         private var lastNetworkChangeTime = 0L
         private val minIntervalMs = 5000L // 最小间隔 5 秒，避免频繁触发
@@ -118,9 +155,7 @@ class MqttForegroundService : Service() {
             lastNetworkChangeTime = now
             
             Log.d(TAG, "network available")
-            if (!MqttConnection.manager.isConnected) {
-                MqttConnection.manager.reconnectNow()
-            }
+            MqttConnection.manager.ensureAlive()
         }
 
         override fun onLost(network: Network) {
@@ -136,9 +171,7 @@ class MqttForegroundService : Service() {
                 }
                 lastNetworkChangeTime = now
                 
-                if (!MqttConnection.manager.isConnected) {
-                    MqttConnection.manager.reconnectNow()
-                }
+                MqttConnection.manager.ensureAlive()
             }
         }
     }

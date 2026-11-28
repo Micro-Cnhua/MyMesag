@@ -28,6 +28,7 @@ import java.util.UUID
 /**
  * B 端补发响应：独占订阅 syncreq/{token} → 解密一次后分流：
  * 请求则从已发送内容缓存重放 ts>sinceTs 的通知（只加密给请求方，publish 到 notify 主题）并必发 SyncDone；
+ * sinceTs<=0 的新加入设备不回放历史，只回一个当前时刻的水位；
  * 完成信号则通过 [doneEvents] 交给 A 端接收逻辑，避免同一信封被解密两次而触发抗重放误判。
  */
 class SyncRequestHandler(
@@ -83,9 +84,12 @@ class SyncRequestHandler(
         }
 
         val groupToken = deviceIdentity.groupToken() ?: return
-        val events = cache.replaySince(req.sinceTs, REPLAY_LIMIT)
         val notifyTopic = MqttTopics.notify(groupToken)
-        var upToTs = req.sinceTs
+        // sinceTs<=0 表示请求方还没有基线（新加入的设备）：只建水位，不回放历史。
+        // upToTs 取本机时钟，与 NotificationEvent.ts 同时钟域；A 推进水位后断网重连仍走增量补发。
+        val newPeer = req.sinceTs <= 0L
+        val events = if (newPeer) emptyList() else cache.replaySince(req.sinceTs, REPLAY_LIMIT)
+        var upToTs = if (newPeer) System.currentTimeMillis() else req.sinceTs
         for (e in events) {
             val plain = json.encodeToString(NotificationEvent.serializer(), e)
             val env = CryptoManager.encrypt(plain, myId, req.from, MqttTopics.CH_NOTIFY) ?: continue
@@ -108,7 +112,7 @@ class SyncRequestHandler(
             MqttTopics.syncReq(groupToken),
             json.encodeToString(EncryptedEnvelope.serializer(), doneEnv)
         )
-        Log.d(TAG, "sync replay done to=${req.from} count=${events.size} upToTs=$upToTs")
+        Log.d(TAG, "sync replay done to=${req.from} count=${events.size} upToTs=$upToTs newPeer=$newPeer")
     }
 
     companion object {

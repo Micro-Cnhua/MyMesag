@@ -87,8 +87,15 @@ fun SyncSettingsScreen(
             fontWeight = FontWeight.Bold
         )
 
-        // 使用教程（默认展开，置顶）
+        // 使用教程（置顶，不可折叠）
         TutorialCard()
+
+        ActionButton(
+            icon = AppIcons.MenuBook,
+            title = "额外帮助",
+            description = "查看在线额外帮助",
+            onClick = onOpenManual
+        )
 
         // 快速操作
         Text(
@@ -172,13 +179,6 @@ fun SyncSettingsScreen(
                     }
                 }
             }
-
-            ActionButton(
-                icon = AppIcons.MenuBook,
-                title = "额外帮助",
-                description = "查看在线额外帮助",
-                onClick = onOpenManual
-            )
         }
 
         // 系统设置与保活
@@ -215,41 +215,26 @@ fun SyncSettingsScreen(
 
 @Composable
 private fun TutorialCard() {
-    var expanded by remember { mutableStateOf(true) }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        onClick = { expanded = !expanded }
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "使用教程",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Icon(
-                    if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
-                    contentDescription = if (expanded) "收起" else "展开",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (expanded) {
-                Spacer(Modifier.height(12.dp))
-                TutorialStep("1", "开启「通知使用权」")
-                TutorialStep("2", "配置 MQTT 服务器并连接")
-                TutorialStep("3", "两台设备互相配对")
-                TutorialStep("4", "在「应用选择」开启要同步的应用")
-                TutorialStep("5", "在「设备身份」控制发送/接收方向")
-            }
+            Text(
+                "使用教程",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(12.dp))
+            TutorialStep("1", "点击「通知使用权配置」为应用授予通知使用权")
+            TutorialStep("2", "点击「通知权限」为应用授予可通知权限")
+            TutorialStep("3", "点击「MQTT 配置」 填写 MQTT 服务器并连接")
+            TutorialStep("4", "点击「设备配对」两台设备扫码进行配对")
+            TutorialStep("5", "在「设备身份」控制发送/接收方向")
+            TutorialStep("6", "在「系统设置与保活」授予电池优化和自启动")
+            TutorialStep("7", "在 <应用选择页> 为需要同步信息的应用开启/关闭同步功能")
         }
     }
 }

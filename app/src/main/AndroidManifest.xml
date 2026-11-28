@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- 唤醒型 MQTT 心跳：Doze 中按时发 PINGREQ。已加入电池优化白名单的应用无需此权限即可调用；
+         未加入时可在系统「闹钟和提醒」里授予，否则降级为系统合并延后的非精确闹钟 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"

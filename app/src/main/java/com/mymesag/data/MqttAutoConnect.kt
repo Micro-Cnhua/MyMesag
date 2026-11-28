@@ -27,7 +27,14 @@ object MqttAutoConnect {
 
     suspend fun ensureConnected(app: MyMesagApp) {
         val manager = MqttConnection.manager
-        if (manager.isConnected) return
+        if (manager.isConnected) {
+            // 半开连接：本地 TCP 标志仍为 true，但心跳循环已被 Doze/ROM 冻住，必须强制重连
+            if (manager.isLinkStale()) {
+                Log.d(TAG, "connected but link stale, force reconnect")
+                manager.reconnectNow()
+            }
+            return
+        }
         val store = app.mqttConfigStore
         val broker = store.savedBrokerUrl()
         if (broker.isNullOrBlank()) {

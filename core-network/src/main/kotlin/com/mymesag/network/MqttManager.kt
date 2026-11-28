@@ -1,5 +1,6 @@
 package com.mymesag.network
 
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -17,6 +18,7 @@ import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.MqttException
 import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.eclipse.paho.client.mqttv3.internal.HighResolutionTimer
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.io.ByteArrayInputStream
 import java.security.KeyStore
@@ -46,6 +48,11 @@ data class ReceivedMessage(
     val retained: Boolean = false
 )
 
+// Paho 默认计时用 System.nanoTime（CLOCK_MONOTONIC），深睡期间不推进，会让心跳误判「还没到点」而漏发。
+private object BootTimeTimer : HighResolutionTimer {
+    override fun nanoTime(): Long = SystemClock.elapsedRealtimeNanos()
+}
+
 class MqttManager(private val scope: CoroutineScope) {
 
     private val _state = MutableStateFlow(MqttState.DISCONNECTED)
@@ -64,6 +71,10 @@ class MqttManager(private val scope: CoroutineScope) {
     @Volatile
     private var reconnectAttempts = 0
 
+    /** 进入 CONNECTING 的时刻，用于识别僵死的连接中状态（0 表示从未记录，一律视为僵死）。 */
+    @Volatile
+    private var connectingSince = 0L
+
     private var reconnectJob: kotlinx.coroutines.Job? = null
 
     private val maxReconnectAttempts = 10
@@ -78,6 +89,18 @@ class MqttManager(private val scope: CoroutineScope) {
      */
     @Volatile
     var networkAvailable: () -> Boolean = { true }
+
+    /**
+     * 由 app 层注入 applicationContext，用于唤醒型心跳发送器（Doze 中也能按时发 PINGREQ）。
+     * 为 null 时退回 Paho 默认的非唤醒 Timer 心跳。
+     */
+    @Volatile
+    var appContext: android.content.Context? = null
+
+    private var pingSender: AlarmPingSender? = null
+
+    @Volatile
+    private var keepAliveMs: Long = 60_000L
 
     private var cachedSslSocketFactory: SSLSocketFactory? = null
     private var cachedCaCertPem: String? = null
@@ -116,15 +139,29 @@ class MqttManager(private val scope: CoroutineScope) {
     private var lastConfig: MqttConfig? = null
 
     fun connect(cfg: MqttConfig) {
-        if (_state.value == MqttState.CONNECTING ||
-            _state.value == MqttState.CONNECTED
-        ) return
+        val s = _state.value
+        if (s == MqttState.CONNECTING || s == MqttState.CONNECTED) {
+            val connected = client?.isConnected == true
+            val busyMs = SystemClock.elapsedRealtime() - connectingSince
+            val staleMs = cfg.connectionTimeoutSeconds * 1000L + 5_000L
+            if (s == MqttState.CONNECTED && connected) {
+                Log.d(TAG, "connect ignored: already connected")
+                return
+            }
+            if (s == MqttState.CONNECTING && busyMs < staleMs) {
+                Log.d(TAG, "connect ignored: connecting for ${busyMs}ms")
+                return
+            }
+            // 状态与真实链路不一致，或连接中已超时：必须放行，否则守卫会把所有入口永久挡死
+            Log.w(TAG, "connect: stale $s for ${busyMs}ms (connected=$connected), force re-connect")
+        }
         Log.d(TAG, "connect -> ${cfg.brokerUrl} clientId=${cfg.clientId}")
         manuallyDisconnected = false
         lastConfig = cfg
         reconnectAttempts = 0
         reconnectJob?.cancel()
         _state.value = MqttState.CONNECTING
+        connectingSince = SystemClock.elapsedRealtime()
         cleanupClient()
         doConnect(cfg)
     }
@@ -132,7 +169,15 @@ class MqttManager(private val scope: CoroutineScope) {
     private fun doConnect(cfg: MqttConfig) {
         scope.launch {
             try {
-                val c = MqttAsyncClient(cfg.brokerUrl, cfg.clientId, MemoryPersistence())
+                keepAliveMs = cfg.keepAliveSeconds * 1000L
+                val ctx = appContext
+                val sender = if (ctx != null) AlarmPingSender(ctx) else null
+                pingSender = sender
+                val c = if (sender != null) {
+                    MqttAsyncClient(cfg.brokerUrl, cfg.clientId, MemoryPersistence(), sender, null, BootTimeTimer)
+                } else {
+                    MqttAsyncClient(cfg.brokerUrl, cfg.clientId, MemoryPersistence())
+                }
                 client = c
                 c.setCallback(callback)
                 val options = MqttConnectOptions().apply {
@@ -211,11 +256,19 @@ class MqttManager(private val scope: CoroutineScope) {
 
     fun reconnectNow() {
         if (manuallyDisconnected) return
+        val cfg = lastConfig
+        if (cfg == null) {
+            // 绝不能在此置 CONNECTING：本进程还没人调用过 connect()，改了状态就会把随后
+            // 真正的 connect() 挡在守卫外，而 lastConfig 永远为空 → 所有自愈入口永久空转
+            Log.w(TAG, "reconnectNow: no config yet, skip and wait for connect()")
+            return
+        }
         reconnectAttempts = 0
         reconnectJob?.cancel()
         _state.value = MqttState.CONNECTING
+        connectingSince = SystemClock.elapsedRealtime()
         cleanupClient()
-        lastConfig?.let { doConnect(it) }
+        doConnect(cfg)
     }
 
     private fun scheduleReconnect(forcePlateau: Boolean = false) {
@@ -260,6 +313,32 @@ class MqttManager(private val scope: CoroutineScope) {
             Log.w(TAG, "cleanupClient: ${e.message}")
         }
         client = null
+        pingSender?.stop()
+        pingSender = null
+    }
+
+    /**
+     * 心跳循环是否已被冻住：距上次真正执行心跳检查超过 2×keepAlive + 5 秒。
+     * Doze/ROM 冻结闹钟时会出现这种情况，此时 isConnected 仍可能为 true（半开连接）。
+     */
+    fun isLinkStale(): Boolean {
+        val last = pingSender?.lastRunAt ?: return false
+        if (last == 0L) return false
+        return android.os.SystemClock.elapsedRealtime() - last > keepAliveMs * 2 + 5_000L
+    }
+
+    /**
+     * 亮屏/回前台时的活性自检。isConnected 只是 Paho 的本地 TCP 标志位：
+     * Doze 期间 broker 踢线或 NAT 表项过期时本地收不到 FIN，该标志会一直为 true，
+     * 导致所有重连入口（回前台、网络回调）全部被挡死。这里主动识别并强制重连。
+     */
+    fun ensureAlive() {
+        if (manuallyDisconnected) return
+        val connected = isConnected
+        val stale = isLinkStale()
+        if (connected && !stale) return
+        Log.d(TAG, "ensureAlive: connected=$connected stale=$stale -> reconnect")
+        reconnectNow()
     }
 
     private fun resubscribeAll() {
